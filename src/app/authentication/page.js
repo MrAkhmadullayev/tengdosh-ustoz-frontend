@@ -16,15 +16,26 @@ import {
 	InputOTPSeparator,
 	InputOTPSlot,
 } from '@/components/ui/input-otp'
-import { Loader2, MessageCircle, Send, ShieldCheck } from 'lucide-react'
+import {
+	AlertCircle,
+	Loader2,
+	MessageCircle,
+	Send,
+	ShieldCheck,
+} from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 export default function LoginPage() {
+	const router = useRouter()
+
 	const [otp, setOtp] = useState('')
 	const [isLoading, setIsLoading] = useState(false)
-	const [timeLeft, setTimeLeft] = useState(60) // Qayta so'rash uchun taymer
+	const [timeLeft, setTimeLeft] = useState(60)
 	const [isSuccess, setIsSuccess] = useState(false)
+	const [error, setError] = useState('')
+	const [roleText, setRoleText] = useState('')
 
 	// Taymer mantig'i
 	useEffect(() => {
@@ -34,37 +45,65 @@ export default function LoginPage() {
 		}
 	}, [timeLeft])
 
-	// Kirishni tasdiqlash
+	// Kodni tozalash (xatolik bo'lganda yangidan yozish uchun qulaylik)
+	const handleOtpChange = value => {
+		setOtp(value)
+		if (error) setError('') // Yangi son terilganda xatoni o'chirish
+	}
+
+	// Kirishni tasdiqlash va Rollarni ajratish
 	const handleVerify = e => {
 		e.preventDefault()
 		if (otp.length !== 6) return
 
 		setIsLoading(true)
+		setError('')
 
-		// Backendga kodni yuborishni simulyatsiya qilish
+		// Backend (yoki API) ga jo'natish simulyatsiyasi
 		setTimeout(() => {
 			setIsLoading(false)
-			setIsSuccess(true)
 
-			// Muvaffaqiyatli kirgandan so'ng dashboard'ga yo'naltirish (simulyatsiya)
-			// router.push("/dashboard");
-		}, 1500)
+			const lastDigit = otp.slice(-1) // Kodning eng oxirgi raqamini olish
+
+			if (lastDigit === '1') {
+				// ADMIN holati
+				setIsSuccess(true)
+				setRoleText('Admin')
+				setTimeout(() => router.push('/admin/dashboard'), 1500)
+			} else if (lastDigit === '2') {
+				// MENTOR holati
+				setIsSuccess(true)
+				setRoleText('Mentor')
+				setTimeout(() => router.push('/mentor/dashboard'), 1500)
+			} else if (lastDigit === '3') {
+				// TALABA (STUDENT) holati
+				setIsSuccess(true)
+				setRoleText('Talaba')
+				setTimeout(() => router.push('/student/dashboard'), 1500)
+			} else {
+				// XATO KOD holati
+				setError('Kiritilgan tasdiqlash kodi xato yoki yaroqsiz.')
+				setOtp('') // Xato bo'lsa, inputlarni tozalab yuboramiz
+			}
+		}, 1200)
 	}
 
 	return (
-		<div className=''>
+		<div className='min-h-screen bg-muted/20 flex flex-col'>
 			<Navbar />
-			<div className='min-h-screen bg-muted/20 flex flex-col items-center justify-center p-4'>
+
+			<main className='flex-1 flex flex-col items-center justify-center p-4'>
 				<Card className='w-full max-w-md border-muted shadow-lg'>
 					{isSuccess ? (
 						// MUVAFFAQIYATLI KIRISH
-						<CardContent className='pt-10 pb-8 flex flex-col items-center text-center space-y-4 animate-in fade-in zoom-in duration-300'>
+						<CardContent className='pt-10 pb-10 flex flex-col items-center text-center space-y-4 animate-in fade-in zoom-in duration-300'>
 							<div className='h-20 w-20 bg-green-500/10 rounded-full flex items-center justify-center mb-2'>
 								<ShieldCheck className='h-10 w-10 text-green-500' />
 							</div>
 							<CardTitle className='text-2xl'>Muvaffaqiyatli!</CardTitle>
 							<CardDescription className='text-base'>
-								Tizimga muvaffaqiyatli kirdingiz. Profilingizga
+								Tizimga muvaffaqiyatli kirdingiz.{' '}
+								<strong className='text-foreground'>{roleText} paneli</strong>ga
 								yo'naltirilmoqdasiz...
 							</CardDescription>
 							<Loader2 className='h-6 w-6 animate-spin text-primary mt-4' />
@@ -127,45 +166,53 @@ export default function LoginPage() {
 									onSubmit={handleVerify}
 									className='flex flex-col items-center space-y-6'
 								>
-									<div className='flex justify-center w-full'>
+									<div className='flex justify-center w-full relative'>
 										<InputOTP
 											maxLength={6}
 											value={otp}
-											onChange={value => setOtp(value)}
+											onChange={handleOtpChange}
 											disabled={isLoading}
 											autoFocus
 										>
 											<InputOTPGroup>
 												<InputOTPSlot
 													index={0}
-													className='h-12 w-10 sm:w-12 sm:h-14 text-lg'
+													className={`h-12 w-10 sm:w-12 sm:h-14 text-lg ${error ? 'border-red-500 text-red-500' : ''}`}
 												/>
 												<InputOTPSlot
 													index={1}
-													className='h-12 w-10 sm:w-12 sm:h-14 text-lg'
+													className={`h-12 w-10 sm:w-12 sm:h-14 text-lg ${error ? 'border-red-500 text-red-500' : ''}`}
 												/>
 												<InputOTPSlot
 													index={2}
-													className='h-12 w-10 sm:w-12 sm:h-14 text-lg'
+													className={`h-12 w-10 sm:w-12 sm:h-14 text-lg ${error ? 'border-red-500 text-red-500' : ''}`}
 												/>
 											</InputOTPGroup>
 											<InputOTPSeparator />
 											<InputOTPGroup>
 												<InputOTPSlot
 													index={3}
-													className='h-12 w-10 sm:w-12 sm:h-14 text-lg'
+													className={`h-12 w-10 sm:w-12 sm:h-14 text-lg ${error ? 'border-red-500 text-red-500' : ''}`}
 												/>
 												<InputOTPSlot
 													index={4}
-													className='h-12 w-10 sm:w-12 sm:h-14 text-lg'
+													className={`h-12 w-10 sm:w-12 sm:h-14 text-lg ${error ? 'border-red-500 text-red-500' : ''}`}
 												/>
 												<InputOTPSlot
 													index={5}
-													className='h-12 w-10 sm:w-12 sm:h-14 text-lg'
+													className={`h-12 w-10 sm:w-12 sm:h-14 text-lg ${error ? 'border-red-500 text-red-500' : ''}`}
 												/>
 											</InputOTPGroup>
 										</InputOTP>
 									</div>
+
+									{/* XATOLIK XABARI */}
+									{error && (
+										<div className='flex items-center gap-2 text-sm text-red-500 font-medium bg-red-500/10 px-3 py-2 rounded-lg w-full justify-center animate-in slide-in-from-top-1'>
+											<AlertCircle className='h-4 w-4 shrink-0' />
+											{error}
+										</div>
+									)}
 
 									<Button
 										type='submit'
@@ -175,7 +222,7 @@ export default function LoginPage() {
 										{isLoading ? (
 											<>
 												<Loader2 className='mr-2 h-5 w-5 animate-spin' />
-												Tasdiqlanmoqda...
+												Tekshirilmoqda...
 											</>
 										) : (
 											'Tasdiqlash va Kirish'
@@ -184,7 +231,7 @@ export default function LoginPage() {
 								</form>
 							</CardContent>
 
-							<CardFooter className='flex flex-col items-center justify-center pb-8 border-t pt-6 bg-muted/10'>
+							<CardFooter className='flex flex-col items-center justify-center pb-8 border-t pt-6 bg-muted/10 rounded-b-xl'>
 								<p className='text-sm text-muted-foreground mb-2'>
 									Kodni olmadingizmi?
 								</p>
@@ -192,7 +239,11 @@ export default function LoginPage() {
 									variant='link'
 									className='text-primary font-medium p-0 h-auto'
 									disabled={timeLeft > 0}
-									onClick={() => setTimeLeft(60)} // Qayta yuborish mantig'i
+									onClick={() => {
+										setTimeLeft(60)
+										setError('')
+										setOtp('')
+									}}
 								>
 									{timeLeft > 0
 										? `Qayta so'rash (${timeLeft}s)`
@@ -211,7 +262,7 @@ export default function LoginPage() {
 					</Link>{' '}
 					rozi bo'lasiz.
 				</p>
-			</div>
+			</main>
 		</div>
 	)
 }
