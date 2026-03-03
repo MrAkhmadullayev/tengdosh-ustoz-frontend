@@ -241,7 +241,7 @@ export default function DashboardLayout({ children, role: initialRole }) {
 			</nav>
 
 			<div className='p-4 border-t'>
-				<Link href='/auth/login'>
+				<Link href='/authentication'>
 					<Button
 						variant='ghost'
 						className='w-full justify-start gap-3 text-red-500 hover:text-red-600 hover:bg-red-50'
@@ -399,7 +399,7 @@ export default function DashboardLayout({ children, role: initialRole }) {
 										className='text-red-600 focus:text-red-700 focus:bg-red-50'
 									>
 										<Link
-											href='/auth/login'
+											href='/authentication'
 											className='cursor-pointer w-full flex items-center'
 										>
 											<LogOut className='mr-2 h-4 w-4' />
