@@ -5,7 +5,6 @@ import { Calendar } from '@/components/ui/calendar'
 import {
 	Card,
 	CardContent,
-	CardDescription,
 	CardFooter,
 	CardHeader,
 	CardTitle,
@@ -26,6 +25,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import api from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { uz } from 'date-fns/locale'
@@ -34,13 +34,16 @@ import {
 	Calendar as CalendarIcon,
 	Clock,
 	Loader2,
+	MessagesSquare,
 	Save,
 	Video,
 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
-export default function MentorCreateLessonPage() {
+export default function EditMentorLessonPage() {
+	const params = useParams()
+	const { id } = params
 	const router = useRouter()
 	const [isLoading, setIsLoading] = useState(false)
 
@@ -48,21 +51,57 @@ export default function MentorCreateLessonPage() {
 		title: '',
 		date: '',
 		time: '',
-		format: 'online', // online, offline, hybrid
+		format: 'online',
 		description: '',
-		zoomLink: '',
 		roomNumber: '',
 		maxStudents: '100',
 		allowComments: true,
+		status: 'upcoming',
 	})
 
-	const handleSave = () => {
+	useEffect(() => {
+		const fetchLesson = async () => {
+			try {
+				const res = await api.get(`/mentor/lessons/${id}`)
+				if (res.data.success) {
+					const l = res.data.lesson
+					setFormData({
+						title: l.title || '',
+						date: l.date ? new Date(l.date).toISOString().split('T')[0] : '',
+						time: l.time || '',
+						format: l.format || 'online',
+						description: l.description || '',
+						roomNumber: l.roomNumber || '',
+						maxStudents: l.maxStudents?.toString() || '100',
+						allowComments: l.allowComments ?? true,
+						status: l.status || 'upcoming',
+					})
+				}
+			} catch (error) {
+				console.error("Ma'lumotlarni yuklashda xatolik:", error)
+			}
+		}
+		if (id) fetchLesson()
+	}, [id])
+
+	const handleSave = async () => {
+		if (!formData.title || !formData.date || !formData.time) {
+			return alert('Iltimos, dars mavzusi, sanasi va vaqtini kiriting')
+		}
+
 		setIsLoading(true)
-		// API Call Simulation
-		setTimeout(() => {
+		try {
+			const res = await api.put(`/mentor/lessons/${id}`, formData)
+			if (res.data.success) {
+				alert(res.data.message)
+				router.push('/mentor/lessons')
+			}
+		} catch (error) {
+			console.error(error)
+			alert(error.response?.data?.message || 'Xatolik yuz berdi')
+		} finally {
 			setIsLoading(false)
-			router.push('/mentor/schedule')
-		}, 600)
+		}
 	}
 
 	return (
@@ -72,29 +111,27 @@ export default function MentorCreateLessonPage() {
 				<Button
 					variant='ghost'
 					size='icon'
-					onClick={() => router.push('/mentor/schedule')}
+					onClick={() => router.push('/mentor/lessons')}
 					className='rounded-full hover:bg-muted'
 				>
 					<ArrowLeft className='h-5 w-5' />
 				</Button>
 				<div>
 					<h1 className='text-3xl font-bold tracking-tight'>
-						Yangi dars yaratish
+						Darsni Tahrirlash
 					</h1>
 					<p className='text-muted-foreground text-sm mt-1'>
-						O'quvchilaringiz uchun yangi dars sessiyasini belgilang.
+						Darsingiz qoidasi, mavzusi yoki joylashuvini o'zgartirish
 					</p>
 				</div>
 			</div>
 
 			<div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
+				{/* ASOSIY FORMA */}
 				<div className='md:col-span-2 space-y-6'>
-					<Card className='shadow-sm border-muted overflow-hidden rounded-2xl'>
+					<Card className='shadow-sm border-muted overflow-hidden'>
 						<CardHeader className='bg-muted/30 border-b pb-5'>
-							<CardTitle className='text-lg'>Dars ma'lumotlari</CardTitle>
-							<CardDescription>
-								Dars mavzusi va batafsil tavsifini kiriting.
-							</CardDescription>
+							<CardTitle className='text-lg'>Asosiy ma'lumotlar</CardTitle>
 						</CardHeader>
 						<CardContent className='p-6 space-y-6'>
 							<div className='space-y-4'>
@@ -108,15 +145,15 @@ export default function MentorCreateLessonPage() {
 										onChange={e =>
 											setFormData({ ...formData, title: e.target.value })
 										}
-										className='bg-background focus-visible:ring-primary/20 rounded-xl h-11'
+										className='bg-background focus-visible:ring-primary/20'
 									/>
 								</div>
 
 								<div className='space-y-2'>
-									<Label>Tavsif</Label>
+									<Label>Dars haqida batafsil ma'lumot</Label>
 									<Textarea
-										placeholder='Bu darsda nimalar haqida gaplashamiz?'
-										className='min-h-[120px] bg-background resize-none focus-visible:ring-primary/20 rounded-xl'
+										placeholder="Bu dars nima haqida bo'ladi va nimalar o'rganiladi?"
+										className='min-h-[120px] bg-background resize-none focus-visible:ring-primary/20'
 										value={formData.description}
 										onChange={e =>
 											setFormData({ ...formData, description: e.target.value })
@@ -124,78 +161,70 @@ export default function MentorCreateLessonPage() {
 									/>
 								</div>
 
-								<div className='space-y-2'>
-									<Label>Maksimal o'quvchilar soni</Label>
-									<Input
-										type='number'
-										min='1'
-										placeholder='100'
-										value={formData.maxStudents}
-										onChange={e =>
-											setFormData({
-												...formData,
-												maxStudents: e.target.value,
-											})
-										}
-										className='bg-background max-w-[150px] h-11 rounded-xl'
-									/>
+								<div className='grid grid-cols-1 gap-4'>
+									<div className='space-y-2'>
+										<Label>Maksimal o'quvchilar soni (Limit)</Label>
+										<Input
+											type='number'
+											placeholder='Odatiy: 100'
+											value={formData.maxStudents}
+											onChange={e =>
+												setFormData({
+													...formData,
+													maxStudents: e.target.value,
+												})
+											}
+											className='bg-background max-w-xs'
+										/>
+									</div>
 								</div>
 							</div>
 						</CardContent>
 					</Card>
 
-					<Card className='shadow-sm border-muted overflow-hidden rounded-2xl'>
+					<Card className='shadow-sm border-muted overflow-hidden'>
 						<CardHeader className='bg-muted/30 border-b pb-5'>
 							<CardTitle className='text-lg flex items-center gap-2'>
-								<Video className='w-5 h-5 text-blue-500' /> Translatsiya
-								sozlamalari
+								<Video className='w-5 h-5 text-blue-500' /> Translatsiya va
+								Manzil sozlamalari
 							</CardTitle>
 						</CardHeader>
 						<CardContent className='p-6 space-y-6'>
 							<div className='space-y-2'>
-								<Label>Dars formati</Label>
+								<Label>Dars qay formatda o'tiladi?</Label>
 								<Select
 									value={formData.format}
 									onValueChange={v => setFormData({ ...formData, format: v })}
 								>
-									<SelectTrigger className='bg-background max-w-xs h-11 rounded-xl'>
+									<SelectTrigger className='bg-background max-w-xs'>
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>
-										<SelectItem value='online'>Online (Masofaviy)</SelectItem>
+										<SelectItem value='online'>
+											Online (Platformada / Zoom)
+										</SelectItem>
 										<SelectItem value='offline'>Offline (Markazda)</SelectItem>
-										<SelectItem value='hybrid'>Gibrid</SelectItem>
+										<SelectItem value='hybrid'>
+											Online ham, Offline ham (Gibrid)
+										</SelectItem>
 									</SelectContent>
 								</Select>
 							</div>
 
-							<div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-								{(formData.format === 'online' ||
-									formData.format === 'hybrid') && (
-									<div className='space-y-2'>
-										<Label>Zoom/Link</Label>
-										<Input
-											placeholder='Havolani kiriting'
-											value={formData.zoomLink}
-											onChange={e =>
-												setFormData({ ...formData, zoomLink: e.target.value })
-											}
-											className='bg-background font-mono text-sm h-11 rounded-xl'
-										/>
-									</div>
-								)}
-
+							<div className='grid grid-cols-1 gap-6'>
 								{(formData.format === 'offline' ||
 									formData.format === 'hybrid') && (
 									<div className='space-y-2'>
-										<Label>Xona raqami</Label>
+										<Label>
+											Xona raqami / Nomi <span className='text-red-500'>*</span>
+										</Label>
 										<Input
-											placeholder='Masalan: 401'
+											placeholder='Masalan: 401-xona, Google xonasi'
 											value={formData.roomNumber}
 											onChange={e =>
 												setFormData({ ...formData, roomNumber: e.target.value })
 											}
-											className='bg-background h-11 rounded-xl'
+											className='bg-background'
 										/>
 									</div>
 								)}
@@ -204,22 +233,24 @@ export default function MentorCreateLessonPage() {
 					</Card>
 				</div>
 
+				{/* YON PANEL (VAQT VA SANA) */}
 				<div className='space-y-6'>
-					<Card className='shadow-sm border-muted overflow-hidden rounded-2xl'>
+					<Card className='shadow-sm border-muted overflow-hidden'>
 						<CardHeader className='bg-muted/30 border-b p-4'>
-							<CardTitle className='text-base'>Vaqt va Sana</CardTitle>
+							<CardTitle className='text-base'>Vaqt va Format</CardTitle>
 						</CardHeader>
-						<CardContent className='p-4 space-y-5'>
-							<div className='space-y-2'>
+						<CardContent className='p-4 space-y-5 flex flex-col'>
+							<div className='space-y-2 flex flex-col'>
 								<Label className='flex items-center gap-2'>
-									<CalendarIcon className='w-4 h-4' /> Sana
+									<CalendarIcon className='w-4 h-4 text-muted-foreground' />{' '}
+									Sana <span className='text-red-500'>*</span>
 								</Label>
 								<Popover>
 									<PopoverTrigger asChild>
 										<Button
-											variant='outline'
+											variant={'outline'}
 											className={cn(
-												'w-full justify-start text-left font-normal h-11 rounded-xl',
+												'w-full justify-start text-left font-normal bg-background',
 												!formData.date && 'text-muted-foreground',
 											)}
 										>
@@ -230,10 +261,7 @@ export default function MentorCreateLessonPage() {
 											)}
 										</Button>
 									</PopoverTrigger>
-									<PopoverContent
-										className='w-auto p-0 rounded-2xl overflow-hidden'
-										align='start'
-									>
+									<PopoverContent className='w-auto p-0' align='start'>
 										<Calendar
 											mode='single'
 											selected={
@@ -253,7 +281,8 @@ export default function MentorCreateLessonPage() {
 
 							<div className='space-y-2'>
 								<Label className='flex items-center gap-2'>
-									<Clock className='w-4 h-4' /> Soat
+									<Clock className='w-4 h-4 text-muted-foreground' /> Soat{' '}
+									<span className='text-red-500'>*</span>
 								</Label>
 								<div className='grid grid-cols-2 gap-2'>
 									<Select
@@ -265,7 +294,7 @@ export default function MentorCreateLessonPage() {
 											})
 										}
 									>
-										<SelectTrigger className='h-11 rounded-xl'>
+										<SelectTrigger className='bg-background'>
 											<SelectValue placeholder='Soat' />
 										</SelectTrigger>
 										<SelectContent>
@@ -284,15 +313,28 @@ export default function MentorCreateLessonPage() {
 										onValueChange={m =>
 											setFormData({
 												...formData,
-												time: `${formData.time?.split(':')[0] || '00'}:${m}`,
+												time: `${formData.time?.split(':')[0] || '15'}:${m}`,
 											})
 										}
 									>
-										<SelectTrigger className='h-11 rounded-xl'>
-											<SelectValue placeholder='Daq' />
+										<SelectTrigger className='bg-background'>
+											<SelectValue placeholder='Daqiqa' />
 										</SelectTrigger>
 										<SelectContent>
-											{['00', '15', '30', '45'].map(m => (
+											{[
+												'00',
+												'05',
+												'10',
+												'15',
+												'20',
+												'25',
+												'30',
+												'35',
+												'40',
+												'45',
+												'50',
+												'55',
+											].map(m => (
 												<SelectItem key={m} value={m}>
 													{m}
 												</SelectItem>
@@ -302,12 +344,23 @@ export default function MentorCreateLessonPage() {
 								</div>
 							</div>
 
-							<div className='flex items-center justify-between pt-4 border-t'>
-								<Label className='cursor-pointer' htmlFor='comments'>
-									Izohlarga ruxsat berish
-								</Label>
+							<div className='border-t border-border/50 my-2' />
+
+							<div className='flex items-center justify-between gap-4'>
+								<div className='space-y-0.5'>
+									<Label
+										className='text-sm flex items-center gap-1.5 cursor-pointer'
+										htmlFor='comments-toggle'
+									>
+										<MessagesSquare className='w-4 h-4 text-muted-foreground' />{' '}
+										Izohlar (Sharhlar)
+									</Label>
+									<p className='text-[12px] text-muted-foreground leading-tight'>
+										O'quvchilarga muhokama uchun ruxsat
+									</p>
+								</div>
 								<Switch
-									id='comments'
+									id='comments-toggle'
 									checked={formData.allowComments}
 									onCheckedChange={c =>
 										setFormData({ ...formData, allowComments: c })
@@ -317,16 +370,22 @@ export default function MentorCreateLessonPage() {
 						</CardContent>
 						<CardFooter className='p-4 pt-0'>
 							<Button
-								className='w-full gap-2 h-11 rounded-xl'
+								className='w-full gap-2 font-medium'
+								size='lg'
 								onClick={handleSave}
-								disabled={isLoading || !formData.title || !formData.date}
+								disabled={
+									isLoading ||
+									!formData.title ||
+									!formData.date ||
+									!formData.time
+								}
 							>
 								{isLoading ? (
 									<Loader2 className='h-4 w-4 animate-spin' />
 								) : (
 									<Save className='h-4 w-4' />
 								)}
-								Saqlash
+								O'zgarishlarni Saqlash
 							</Button>
 						</CardFooter>
 					</Card>

@@ -3,165 +3,291 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { ChevronRight, Filter, Search, Star, Users } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from '@/components/ui/table'
+import api from '@/lib/api'
+import { motion } from 'framer-motion'
+import { BookOpen, ChevronRight, Search, Star, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
-const MOCK_MENTORS = [
-	{
-		id: 1,
-		name: 'Jahongir Taylokov',
-		specialty: 'Senior React Developer',
-		rating: 4.9,
-		students: 1250,
-		courses: 12,
-		image:
-			'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=60',
-		bio: "React va Next.js bo'yicha 6 yillik tajribaga ega ekspert.",
+// --- ANIMATION VARIANTS ---
+const containerVariants = {
+	hidden: { opacity: 0 },
+	show: {
+		opacity: 1,
+		transition: { staggerChildren: 0.1 },
 	},
-	{
-		id: 2,
-		name: 'Akmal Turgun',
-		specialty: 'Python & AI Engineer',
-		rating: 4.8,
-		students: 850,
-		courses: 8,
-		image:
-			'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop&q=60',
-		bio: "Sun'iy intellekt va Deep Learning muhandisi.",
+}
+
+const itemVariants = {
+	hidden: { opacity: 0, y: 20 },
+	show: {
+		opacity: 1,
+		y: 0,
+		transition: { type: 'spring', stiffness: 300, damping: 24 },
 	},
-	{
-		id: 3,
-		name: 'Madina Akramova',
-		specialty: 'Senior UI/UX Designer',
-		rating: 5.0,
-		students: 2100,
-		courses: 15,
-		image:
-			'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&auto=format&fit=crop&q=60',
-		bio: "Digital mahsulotlar dizayni bo'yicha xalqaro tajriba.",
-	},
-	{
-		id: 4,
-		name: 'Rustam Qosimov',
-		specialty: 'Flutter Mobile Developer',
-		rating: 4.7,
-		students: 600,
-		courses: 5,
-		image:
-			'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&auto=format&fit=crop&q=60',
-		bio: 'Cross-platform mobil ilovalar yaratish ustasi.',
-	},
-]
+}
+
+const MotionTableRow = motion(TableRow)
 
 export default function StudentMentorsPage() {
 	const router = useRouter()
+	const [mentors, setMentors] = useState([])
 	const [searchQuery, setSearchQuery] = useState('')
+	const [loading, setLoading] = useState(true)
 
-	const filteredMentors = MOCK_MENTORS.filter(
+	useEffect(() => {
+		const fetchMentors = async () => {
+			try {
+				const res = await api.get('/student/mentors')
+				if (res.data.success) {
+					setMentors(res.data.mentors)
+				}
+			} catch (error) {
+				console.error('Mentorlarni yuklashda xatolik:', error)
+			} finally {
+				setLoading(false)
+			}
+		}
+		fetchMentors()
+	}, [])
+
+	const filteredMentors = mentors.filter(
 		mentor =>
-			mentor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			mentor.specialty.toLowerCase().includes(searchQuery.toLowerCase()),
+			(mentor.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+			(mentor.specialty || '')
+				.toLowerCase()
+				.includes(searchQuery.toLowerCase()),
 	)
 
 	return (
-		<div className='max-w-6xl mx-auto space-y-8 pb-12 transition-all duration-500'>
-			{/* Header */}
-			<div className='flex flex-col md:flex-row justify-between items-start md:items-center gap-6'>
-				<div className='space-y-1'>
-					<h1 className='text-3xl font-bold tracking-tight'>Mentorlar</h1>
-					<p className='text-muted-foreground'>
-						Sohangiz bo'yicha eng yaxshi mutaxassislardan bilim oling.
+		<motion.div
+			variants={containerVariants}
+			initial='hidden'
+			animate='show'
+			className='max-w-7xl mx-auto space-y-6 pb-12'
+		>
+			{/* HEADER */}
+			<motion.div
+				variants={itemVariants}
+				className='flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card p-6 rounded-2xl border shadow-sm'
+			>
+				<div>
+					<h1 className='text-2xl sm:text-3xl font-bold tracking-tight text-foreground'>
+						Mentorlar ro'yxati
+					</h1>
+					<p className='text-muted-foreground text-sm mt-1'>
+						Sohangiz bo'yicha eng tajribali mutaxassislarni toping va bilim
+						oling.
 					</p>
 				</div>
-				<div className='flex items-center gap-3 w-full md:w-auto'>
-					<div className='relative flex-1 md:w-80'>
-						<Search className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground' />
-						<Input
-							placeholder='Mentor ismi yoki mutaxassisligi...'
-							className='pl-10 h-11 bg-muted/20 border-transparent focus-visible:ring-primary/20 rounded-2xl w-full'
-							value={searchQuery}
-							onChange={e => setSearchQuery(e.target.value)}
-						/>
-					</div>
-					<Button
-						variant='outline'
-						size='icon'
-						className='rounded-xl h-11 w-11 border-muted/60'
-					>
-						<Filter className='w-4 h-4' />
-					</Button>
+			</motion.div>
+
+			{/* FILTERS & SEARCH */}
+			<motion.div
+				variants={itemVariants}
+				className='flex flex-col sm:flex-row items-center justify-between gap-4'
+			>
+				<div className='relative w-full max-w-md'>
+					<Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
+					<Input
+						placeholder='Mentor ismi yoki mutaxassisligi...'
+						className='pl-9 bg-card border shadow-sm rounded-xl focus-visible:ring-primary'
+						value={searchQuery}
+						onChange={e => setSearchQuery(e.target.value)}
+					/>
 				</div>
-			</div>
+				<Badge
+					variant='outline'
+					className='px-3 py-1.5 w-full sm:w-auto justify-center items-center bg-card text-muted-foreground rounded-xl flex whitespace-nowrap border shadow-sm font-medium'
+				>
+					Natija: {filteredMentors.length} ta mentor
+				</Badge>
+			</motion.div>
 
-			{/* Mentors Grid */}
-			<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6'>
-				{filteredMentors.map(mentor => (
-					<Card
-						key={mentor.id}
-						className='group rounded-3xl border-muted/60 hover:border-primary/50 hover:shadow-2xl hover:shadow-primary/5 transition-all duration-300 overflow-hidden bg-background/50 backdrop-blur-sm relative cursor-pointer'
-						onClick={() => router.push(`/student/mentors/${mentor.id}`)}
-					>
-						<CardContent className='p-6 space-y-4'>
-							<div className='relative mx-auto w-32 h-32'>
-								<div className='absolute inset-0 bg-primary/20 rounded-full animate-pulse blur-xl scale-110 opacity-0 group-hover:opacity-100 transition-opacity' />
-								<Avatar className='w-full h-full border-4 border-background shadow-lg relative z-10'>
-									<AvatarImage
-										src={mentor.image}
-										alt={mentor.name}
-										className='object-cover'
-									/>
-									<AvatarFallback>{mentor.name.charAt(0)}</AvatarFallback>
-								</Avatar>
-								<Badge className='absolute bottom-0 right-0 bg-yellow-400 text-black border-2 border-background font-bold px-2 py-0.5 rounded-lg'>
-									<Star className='w-3 h-3 fill-current mr-1' /> {mentor.rating}
-								</Badge>
-							</div>
+			{/* MENTORS TABLE */}
+			<motion.div
+				variants={itemVariants}
+				className='bg-card rounded-xl border shadow-sm overflow-hidden'
+			>
+				<div className='overflow-x-auto'>
+					<Table>
+						<TableHeader className='bg-muted/50'>
+							<TableRow className='hover:bg-transparent'>
+								<TableHead className='w-[60px] font-bold'>T/R</TableHead>
+								<TableHead className='font-bold min-w-[250px]'>
+									Mentor
+								</TableHead>
+								<TableHead className='font-bold text-center whitespace-nowrap'>
+									Reyting
+								</TableHead>
+								<TableHead className='font-bold text-center whitespace-nowrap'>
+									O'quvchilar
+								</TableHead>
+								<TableHead className='font-bold text-center whitespace-nowrap'>
+									Darslar
+								</TableHead>
+								<TableHead className='text-right font-bold whitespace-nowrap'>
+									Harakatlar
+								</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{loading ? (
+								Array.from({ length: 5 }).map((_, idx) => (
+									<TableRow key={idx}>
+										<TableCell>
+											<Skeleton className='h-4 w-6' />
+										</TableCell>
+										<TableCell>
+											<div className='flex items-center gap-3'>
+												<Skeleton className='h-10 w-10 rounded-full shrink-0' />
+												<div className='space-y-2'>
+													<Skeleton className='h-4 w-32' />
+													<Skeleton className='h-3 w-24' />
+												</div>
+											</div>
+										</TableCell>
+										<TableCell>
+											<Skeleton className='h-6 w-16 mx-auto rounded-full' />
+										</TableCell>
+										<TableCell>
+											<Skeleton className='h-4 w-12 mx-auto' />
+										</TableCell>
+										<TableCell>
+											<Skeleton className='h-4 w-12 mx-auto' />
+										</TableCell>
+										<TableCell className='text-right'>
+											<Skeleton className='h-9 w-32 ml-auto rounded-lg' />
+										</TableCell>
+									</TableRow>
+								))
+							) : filteredMentors.length > 0 ? (
+								filteredMentors.map((mentor, index) => (
+									<MotionTableRow
+										key={mentor.id}
+										variants={itemVariants}
+										className='hover:bg-muted/30 transition-colors cursor-pointer group'
+										onClick={() => router.push(`/student/mentors/${mentor.id}`)}
+									>
+										<TableCell className='font-medium text-muted-foreground py-4'>
+											{index + 1}
+										</TableCell>
 
-							<div className='text-center space-y-1 px-2'>
-								<h3 className='font-bold text-lg group-hover:text-primary transition-colors truncate'>
-									{mentor.name}
-								</h3>
-								<p className='text-sm text-muted-foreground font-medium truncate'>
-									{mentor.specialty}
-								</p>
-							</div>
+										<TableCell className='py-4'>
+											<div className='flex items-center gap-3'>
+												<Avatar className='h-10 w-10 border border-background shadow-sm'>
+													<AvatarImage
+														src={mentor.image}
+														alt={mentor.name}
+														className='object-cover'
+													/>
+													<AvatarFallback className='bg-primary/10 text-primary font-bold text-xs uppercase'>
+														{mentor.name?.charAt(0) || 'M'}
+													</AvatarFallback>
+												</Avatar>
+												<div>
+													<p className='font-bold text-foreground leading-tight mb-1 group-hover:text-primary transition-colors'>
+														{mentor.name}
+													</p>
+													<p className='text-xs text-muted-foreground font-medium truncate max-w-[200px]'>
+														{mentor.specialty}
+													</p>
+												</div>
+											</div>
+										</TableCell>
 
-							<div className='grid grid-cols-2 gap-2 pt-2'>
-								<div className='bg-muted/30 rounded-2xl p-2.5 text-center'>
-									<p className='text-xs text-muted-foreground font-medium uppercase tracking-tighter'>
-										O'quvchilar
-									</p>
-									<p className='font-bold text-sm'>{mentor.students}+</p>
-								</div>
-								<div className='bg-muted/30 rounded-2xl p-2.5 text-center'>
-									<p className='text-xs text-muted-foreground font-medium uppercase tracking-tighter'>
-										Darslar
-									</p>
-									<p className='font-bold text-sm'>{mentor.courses}+</p>
-								</div>
-							</div>
+										<TableCell className='py-4 text-center'>
+											<Badge
+												variant='secondary'
+												className='bg-amber-500/10 text-amber-600 dark:text-amber-400 border-none font-bold gap-1'
+											>
+												<Star className='h-3.5 w-3.5 fill-current' />{' '}
+												{mentor.rating || 'Yangi'}
+											</Badge>
+										</TableCell>
 
-							<Button className='w-full rounded-2xl gap-2 font-bold h-11 bg-muted/50 hover:bg-primary hover:text-white text-foreground transition-all border-none shadow-none group/btn'>
-								Profilni ko'rish{' '}
-								<ChevronRight className='w-4 h-4 group-hover/btn:translate-x-1 transition-transform' />
+										<TableCell className='py-4 text-center'>
+											<div className='flex items-center justify-center gap-1.5 font-semibold text-sm'>
+												<Users className='h-4 w-4 text-muted-foreground' />
+												{mentor.students || 0} ta
+											</div>
+										</TableCell>
+
+										<TableCell className='py-4 text-center'>
+											<div className='flex items-center justify-center gap-1.5 font-semibold text-sm'>
+												<BookOpen className='h-4 w-4 text-muted-foreground' />
+												{mentor.courses || 0} ta
+											</div>
+										</TableCell>
+
+										<TableCell className='text-right py-4'>
+											<Button
+												size='sm'
+												variant='secondary'
+												className='bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors rounded-lg gap-1.5 font-semibold shadow-sm'
+												onClick={e => {
+													e.stopPropagation()
+													router.push(`/student/mentors/${mentor.id}`)
+												}}
+											>
+												Profilni ko'rish <ChevronRight className='w-4 h-4' />
+											</Button>
+										</TableCell>
+									</MotionTableRow>
+								))
+							) : (
+								<TableRow>
+									<TableCell
+										colSpan={6}
+										className='h-48 text-center text-muted-foreground'
+									>
+										<div className='flex flex-col items-center justify-center gap-3'>
+											<div className='bg-muted p-4 rounded-full'>
+												<Users className='h-8 w-8 opacity-40' />
+											</div>
+											<p className='font-medium text-foreground'>
+												Mentorlar topilmadi
+											</p>
+											<p className='text-sm max-w-sm mx-auto'>
+												Sizning qidiruvingizga mos keladigan mentorlar hozircha
+												ro'yxatda yo'q.
+											</p>
+										</div>
+									</TableCell>
+								</TableRow>
+							)}
+						</TableBody>
+					</Table>
+				</div>
+
+				{/* FOOTER */}
+				{!loading && filteredMentors.length > 0 && (
+					<div className='p-4 border-t flex items-center justify-between text-sm text-muted-foreground bg-muted/20'>
+						<p>
+							Jami {filteredMentors.length} ta natijadan 1-
+							{filteredMentors.length} tasi ko'rsatilmoqda.
+						</p>
+						<div className='flex gap-2'>
+							<Button variant='outline' size='sm' disabled>
+								Oldingi
 							</Button>
-						</CardContent>
-					</Card>
-				))}
-			</div>
-
-			{filteredMentors.length === 0 && (
-				<div className='text-center py-20 bg-muted/10 rounded-[3rem] border-2 border-dashed border-muted/30'>
-					<Users className='w-16 h-16 text-muted-foreground/20 mx-auto mb-4' />
-					<h3 className='text-xl font-bold'>Mentorlar topilmadi</h3>
-					<p className='text-muted-foreground max-w-xs mx-auto mt-2'>
-						Qidiruv so'rovini o'zgartirib ko'ring yoki boshqa sohani tanlang.
-					</p>
-				</div>
-			)}
-		</div>
+							<Button variant='outline' size='sm' disabled>
+								Keyingi
+							</Button>
+						</div>
+					</div>
+				)}
+			</motion.div>
+		</motion.div>
 	)
 }

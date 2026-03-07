@@ -16,6 +16,7 @@ import {
 	InputOTPSeparator,
 	InputOTPSlot,
 } from '@/components/ui/input-otp'
+import api from '@/lib/api'
 import {
 	AlertCircle,
 	Loader2,
@@ -52,40 +53,49 @@ export default function LoginPage() {
 	}
 
 	// Kirishni tasdiqlash va Rollarni ajratish
-	const handleVerify = e => {
+	const handleVerify = async e => {
 		e.preventDefault()
 		if (otp.length !== 6) return
 
 		setIsLoading(true)
 		setError('')
 
-		// Backend (yoki API) ga jo'natish simulyatsiyasi
-		setTimeout(() => {
-			setIsLoading(false)
+		try {
+			const res = await api.post('/auth/verify', { code: otp })
+			const data = res.data
 
-			const lastDigit = otp.slice(-1) // Kodning eng oxirgi raqamini olish
-
-			if (lastDigit === '1') {
-				// ADMIN holati
-				setIsSuccess(true)
-				setRoleText('Admin')
-				setTimeout(() => router.push('/admin/dashboard'), 1500)
-			} else if (lastDigit === '2') {
-				// MENTOR holati
-				setIsSuccess(true)
-				setRoleText('Mentor')
-				setTimeout(() => router.push('/mentor/dashboard'), 1500)
-			} else if (lastDigit === '3') {
-				// TALABA (STUDENT) holati
-				setIsSuccess(true)
-				setRoleText('Talaba')
-				setTimeout(() => router.push('/student/dashboard'), 1500)
+			if (!data.success) {
+				setError(
+					data.message || 'Kiritilgan tasdiqlash kodi xato yoki yaroqsiz.',
+				)
+				setOtp('')
 			} else {
-				// XATO KOD holati
-				setError('Kiritilgan tasdiqlash kodi xato yoki yaroqsiz.')
-				setOtp('') // Xato bo'lsa, inputlarni tozalab yuboramiz
+				const { user } = data
+				setIsSuccess(true)
+
+				if (!user.isRegistered) {
+					setRoleText("Ro'yxatdan o'tish")
+					setTimeout(() => router.push('/authentication/confirm'), 1500)
+				} else if (user.role === 'admin') {
+					setRoleText('Admin')
+					setTimeout(() => router.push('/admin/dashboard'), 1500)
+				} else if (user.role === 'mentor') {
+					setRoleText('Mentor')
+					setTimeout(() => router.push('/mentor/dashboard'), 1500)
+				} else {
+					setRoleText('Talaba')
+					setTimeout(() => router.push('/student/dashboard'), 1500)
+				}
 			}
-		}, 1200)
+		} catch (err) {
+			console.error('Auth error:', err)
+			setError(
+				err.response?.data?.message || 'Server bilan ulanishda xato yuz berdi.',
+			)
+			setOtp('')
+		} finally {
+			setIsLoading(false)
+		}
 	}
 
 	return (

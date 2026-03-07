@@ -1,413 +1,417 @@
 'use client'
 
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Textarea } from '@/components/ui/textarea'
-import { cn } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
-	ArrowRight,
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import api from '@/lib/api'
+import { format } from 'date-fns'
+import { uz } from 'date-fns/locale'
+import { motion } from 'framer-motion'
+import {
+	BookOpen,
 	Calendar,
-	CheckCircle2,
+	ClipboardList,
 	Clock,
-	PlayCircle,
-	PlusCircle,
+	MapPin,
+	Play,
+	Radio,
 	Search,
 	Users,
 	Video,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
-const MOCK_COURSES = [
-	{
-		id: 1,
-		title: 'React Advanced: Performance Optimization',
-		mentor: 'Jahongir Taylokov',
-		date: '2024-02-26',
-		time: '10:00',
-		status: 'live',
-		type: 'online',
-		attendees: 12,
-		image:
-			'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=800&auto=format&fit=crop&q=60',
+// --- ANIMATION VARIANTS ---
+const containerVariants = {
+	hidden: { opacity: 0 },
+	show: {
+		opacity: 1,
+		transition: { staggerChildren: 0.1 },
 	},
-	{
-		id: 2,
-		title: 'Next.js 14 Web Dev',
-		mentor: 'Akmal Turgun',
-		date: '2024-02-27',
-		time: '14:30',
-		status: 'upcoming',
-		type: 'online',
-		attendees: 45,
-		image:
-			'https://images.unsplash.com/photo-1618477247222-acbdb0e159b3?w=800&auto=format&fit=crop&q=60',
-	},
-	{
-		id: 3,
-		title: 'UI/UX Design Fundamentals',
-		mentor: 'Madina Akramova',
-		date: '2024-02-25',
-		time: '11:00',
-		status: 'completed',
-		type: 'offline',
-		attendees: null,
-		image:
-			'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=800&auto=format&fit=crop&q=60',
-	},
-	{
-		id: 4,
-		title: 'Mobile App with Flutter',
-		mentor: 'Rustam Qosimov',
-		date: '2024-03-01',
-		time: '16:00',
-		status: 'upcoming',
-		type: 'hybrid',
-		attendees: 30,
-		image:
-			'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=800&auto=format&fit=crop&q=60',
-	},
-]
+}
 
-export default function StudentCoursesPage() {
+const itemVariants = {
+	hidden: { opacity: 0, y: 20 },
+	show: {
+		opacity: 1,
+		y: 0,
+		transition: { type: 'spring', stiffness: 300, damping: 24 },
+	},
+}
+
+const MotionTableRow = motion(TableRow)
+
+export default function StudentLessonsPage() {
 	const router = useRouter()
+	const [lessons, setLessons] = useState([])
+	const [loading, setLoading] = useState(true)
 	const [searchQuery, setSearchQuery] = useState('')
-	const [applicationModalOpen, setApplicationModalOpen] = useState(false)
-	const [selectedCourse, setSelectedCourse] = useState(null)
-	const [isSubmitting, setIsSubmitting] = useState(false)
-	const [isSuccess, setIsSuccess] = useState(false)
+	const [activeTab, setActiveTab] = useState('live')
 
-	const handleOpenApplication = course => {
-		setSelectedCourse(course)
-		setApplicationModalOpen(true)
-		setIsSuccess(false)
+	const fetchLessons = async () => {
+		try {
+			setLoading(true)
+			const res = await api.get('/student/lessons')
+			if (res.data.success) {
+				setLessons(res.data.lessons)
+			}
+		} catch (error) {
+			console.error('Darslarni yuklashda xatolik:', error)
+		} finally {
+			setLoading(false)
+		}
 	}
 
-	const handleApply = () => {
-		setIsSubmitting(true)
-		// Simulyatsiya
-		setTimeout(() => {
-			setIsSubmitting(false)
-			setIsSuccess(true)
-			setTimeout(() => {
-				setApplicationModalOpen(false)
-			}, 2000)
-		}, 1500)
+	useEffect(() => {
+		fetchLessons()
+		const savedTab = localStorage.getItem('studentLessonsTab')
+		if (savedTab && ['live', 'upcoming', 'completed'].includes(savedTab)) {
+			setActiveTab(savedTab)
+		}
+	}, [])
+
+	const handleTabChange = value => {
+		setActiveTab(value)
+		localStorage.setItem('studentLessonsTab', value)
 	}
 
-	const filteredCourses = status =>
-		MOCK_COURSES.filter(
-			c =>
-				c.status === status &&
-				(c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					c.mentor.toLowerCase().includes(searchQuery.toLowerCase())),
+	const getFormatBadge = lFormat => {
+		switch (lFormat) {
+			case 'online':
+				return (
+					<Badge
+						variant='outline'
+						className='flex w-fit items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20'
+					>
+						<Video className='h-3.5 w-3.5' /> Masofaviy
+					</Badge>
+				)
+			case 'offline':
+				return (
+					<Badge
+						variant='outline'
+						className='flex w-fit items-center gap-1.5 text-xs font-medium text-orange-600 bg-orange-50 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20'
+					>
+						<MapPin className='h-3.5 w-3.5' /> Markazda
+					</Badge>
+				)
+			case 'hybrid':
+				return (
+					<Badge
+						variant='outline'
+						className='flex w-fit items-center gap-1.5 text-xs font-medium text-purple-600 bg-purple-50 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20'
+					>
+						<Users className='h-3.5 w-3.5' /> Gibrid
+					</Badge>
+				)
+			default:
+				return null
+		}
+	}
+
+	const checkStatus = lesson => {
+		if (lesson.status === 'live') return 'live'
+		if (lesson.status === 'completed') return 'completed'
+
+		try {
+			const lessonDate = new Date(
+				`${lesson.date.split('T')[0]}T${lesson.time}:00`,
+			)
+			const now = new Date()
+			const timeDiff = lessonDate.getTime() - now.getTime()
+
+			if (timeDiff > 0) return 'upcoming'
+			if (timeDiff < -10800000) return 'completed'
+			return 'upcoming'
+		} catch {
+			return 'upcoming'
+		}
+	}
+
+	const filteredLessons = lessons.filter(l => {
+		const searchLower = searchQuery.toLowerCase()
+		const mentorName =
+			`${l.mentor?.firstName || ''} ${l.mentor?.lastName || ''}`.toLowerCase()
+		return (
+			(l.title || '').toLowerCase().includes(searchLower) ||
+			mentorName.includes(searchLower)
 		)
+	})
 
-	const CourseCard = ({ course }) => (
-		<Card className='group overflow-hidden rounded-3xl border-muted/60 shadow-sm hover:shadow-xl transition-all duration-300 bg-background/50 backdrop-blur-sm'>
-			<CardContent className='p-0 flex flex-col sm:flex-row'>
-				{/* Image Section */}
-				<div className='relative w-full sm:w-64 h-48 sm:h-auto overflow-hidden'>
-					<img
-						src={course.image}
-						alt={course.title}
-						className='w-full h-full object-cover transition-transform duration-500 group-hover:scale-110'
-					/>
-					<div className='absolute inset-0 bg-gradient-to-t from-black/60 to-transparent' />
-					<div className='absolute bottom-3 left-3'>
-						<Badge
-							className={cn(
-								'border-0 font-bold',
-								course.type === 'online'
-									? 'bg-blue-500 text-white'
-									: course.type === 'offline'
-										? 'bg-orange-500 text-white'
-										: 'bg-purple-500 text-white',
+	const renderTable = statusTab => {
+		const tabLessons = filteredLessons.filter(l => checkStatus(l) === statusTab)
+
+		return (
+			<motion.div
+				variants={itemVariants}
+				initial='hidden'
+				animate='show'
+				className='bg-card rounded-xl border shadow-sm overflow-hidden mt-4'
+			>
+				<div className='overflow-x-auto'>
+					<Table>
+						<TableHeader className='bg-muted/50'>
+							<TableRow className='hover:bg-transparent'>
+								<TableHead className='w-[60px] whitespace-nowrap font-bold'>
+									T/R
+								</TableHead>
+								<TableHead className='font-bold min-w-[250px]'>
+									Dars Nomi
+								</TableHead>
+								<TableHead className='font-bold whitespace-nowrap'>
+									Ustoz
+								</TableHead>
+								<TableHead className='font-bold whitespace-nowrap'>
+									Sana va Vaqt
+								</TableHead>
+								<TableHead className='font-bold whitespace-nowrap'>
+									Format
+								</TableHead>
+								<TableHead className='text-right font-bold whitespace-nowrap'>
+									Amallar
+								</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{loading ? (
+								Array.from({ length: 4 }).map((_, idx) => (
+									<TableRow key={idx}>
+										<TableCell>
+											<Skeleton className='h-4 w-6' />
+										</TableCell>
+										<TableCell>
+											<Skeleton className='h-5 w-48' />
+										</TableCell>
+										<TableCell>
+											<div className='flex items-center gap-2'>
+												<Skeleton className='h-8 w-8 rounded-full' />
+												<Skeleton className='h-4 w-24' />
+											</div>
+										</TableCell>
+										<TableCell>
+											<div className='space-y-2'>
+												<Skeleton className='h-4 w-20' />
+												<Skeleton className='h-3 w-12' />
+											</div>
+										</TableCell>
+										<TableCell>
+											<Skeleton className='h-6 w-24 rounded-full' />
+										</TableCell>
+										<TableCell className='text-right'>
+											<Skeleton className='h-9 w-28 ml-auto rounded-lg' />
+										</TableCell>
+									</TableRow>
+								))
+							) : tabLessons.length === 0 ? (
+								<TableRow>
+									<TableCell
+										colSpan={6}
+										className='h-40 text-center text-muted-foreground'
+									>
+										<div className='flex flex-col items-center justify-center gap-2'>
+											<BookOpen className='h-8 w-8 opacity-20' />
+											<p>Bu bo'limda darslar topilmadi.</p>
+										</div>
+									</TableCell>
+								</TableRow>
+							) : (
+								tabLessons.map((lesson, index) => {
+									const initials = `${lesson.mentor?.firstName?.[0] || ''}${lesson.mentor?.lastName?.[0] || ''}`
+									return (
+										<MotionTableRow
+											key={lesson._id}
+											variants={itemVariants}
+											className='hover:bg-muted/30 transition-colors group'
+										>
+											<TableCell className='font-medium text-muted-foreground py-4'>
+												{index + 1}
+											</TableCell>
+
+											<TableCell className='py-4'>
+												<p className='font-bold text-foreground leading-tight line-clamp-2 group-hover:text-primary transition-colors'>
+													{lesson.title}
+												</p>
+											</TableCell>
+
+											<TableCell className='py-4'>
+												<div className='flex items-center gap-3'>
+													<Avatar className='h-8 w-8 border border-background shadow-sm'>
+														<AvatarFallback className='bg-primary/10 text-primary text-[10px] font-bold'>
+															{initials || 'U'}
+														</AvatarFallback>
+													</Avatar>
+													<span className='font-semibold text-sm'>
+														{lesson.mentor?.firstName} {lesson.mentor?.lastName}
+													</span>
+												</div>
+											</TableCell>
+
+											<TableCell className='py-4'>
+												<div className='flex flex-col gap-1.5'>
+													<div className='flex items-center gap-1.5 text-sm font-medium'>
+														<Calendar className='h-3.5 w-3.5 text-primary' />
+														{format(new Date(lesson.date), 'd MMM, yyyy', {
+															locale: uz,
+														})}
+													</div>
+													<div className='flex items-center gap-1.5 text-xs text-muted-foreground'>
+														<Clock className='h-3.5 w-3.5' />
+														{lesson.time}
+													</div>
+												</div>
+											</TableCell>
+
+											<TableCell className='py-4'>
+												{getFormatBadge(lesson.format)}
+											</TableCell>
+
+											<TableCell className='text-right py-4'>
+												<div className='flex items-center justify-end gap-2 text-sm font-medium'>
+													{statusTab === 'live' ? (
+														<Button
+															size='sm'
+															className='gap-2 bg-red-600 hover:bg-red-700 text-white animate-pulse shadow-md rounded-lg'
+															onClick={() =>
+																router.push(
+																	`/student/courses/${lesson._id}/watch`,
+																)
+															}
+														>
+															<Play className='w-4 h-4 fill-current' />{' '}
+															Qo'shilish
+														</Button>
+													) : (
+														<Badge
+															variant='secondary'
+															className='text-muted-foreground font-medium bg-muted px-3 py-1'
+														>
+															{statusTab === 'upcoming'
+																? 'Kutilmoqda'
+																: 'Yakunlangan'}
+														</Badge>
+													)}
+												</div>
+											</TableCell>
+										</MotionTableRow>
+									)
+								})
 							)}
-						>
-							{course.type === 'online'
-								? 'Onlayn'
-								: course.type === 'offline'
-									? 'Offlayn'
-									: 'Gibrid'}
-						</Badge>
-					</div>
+						</TableBody>
+					</Table>
 				</div>
-
-				{/* Content Section */}
-				<div className='flex-1 p-6 flex flex-col justify-between gap-4'>
-					<div className='space-y-3'>
-						<div className='flex justify-between items-start gap-4'>
-							<h3 className='text-xl font-bold leading-tight group-hover:text-primary transition-colors line-clamp-2'>
-								{course.title}
-							</h3>
-							{course.status === 'live' && (
-								<Badge className='bg-red-500 hover:bg-red-600 animate-pulse border-0'>
-									LIVE
-								</Badge>
-							)}
-						</div>
-
-						<div className='flex flex-wrap items-center gap-y-2 gap-x-4 text-sm text-muted-foreground'>
-							<span className='flex items-center gap-1.5 font-medium'>
-								<Calendar className='w-4 h-4 text-primary' /> {course.date}
-							</span>
-							<span className='flex items-center gap-1.5 font-medium'>
-								<Clock className='w-4 h-4 text-primary' /> {course.time}
-							</span>
-							<span className='flex items-center gap-1.5 font-medium'>
-								<Users className='w-4 h-4 text-primary' /> {course.mentor}
-							</span>
-						</div>
-					</div>
-
-					<div className='flex items-center justify-between pt-2 border-t border-muted/20'>
-						{course.status === 'live' ? (
-							<Button
-								className='rounded-xl gap-2 font-bold px-6 bg-primary shadow-lg shadow-primary/20 h-11'
-								onClick={() =>
-									router.push(`/student/courses/${course.id}/watch`)
-								}
-							>
-								<PlayCircle className='w-5 h-5' /> Darsga qo'shilish
-							</Button>
-						) : course.status === 'upcoming' ? (
-							<div className='flex gap-2 w-full'>
-								<Button
-									variant='outline'
-									className='flex-1 rounded-xl gap-2 font-bold h-11 border-primary/20 text-primary hover:bg-primary/5'
-									onClick={() => handleOpenApplication(course)}
-								>
-									<PlusCircle className='w-5 h-5' /> Ariza qoldirish
-								</Button>
-								<Button
-									variant='ghost'
-									className='rounded-xl font-bold h-11 group/btn'
-								>
-									Batafsil{' '}
-									<ArrowRight className='w-4 h-4 ml-1 group-hover/btn:translate-x-1 transition-transform' />
-								</Button>
-							</div>
-						) : (
-							<Button
-								variant='secondary'
-								className='rounded-xl gap-2 font-bold px-6 h-11'
-								onClick={() =>
-									router.push(`/student/courses/${course.id}/watch`)
-								}
-							>
-								<PlayCircle className='w-5 h-5' /> Videoni ko'rish
-							</Button>
-						)}
-					</div>
-				</div>
-			</CardContent>
-		</Card>
-	)
+			</motion.div>
+		)
+	}
 
 	return (
-		<div className='max-w-5xl mx-auto space-y-8 pb-12 transition-all duration-500'>
-			{/* Header */}
-			<div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6'>
-				<div className='space-y-1'>
-					<h1 className='text-3xl font-bold tracking-tight'>
-						Darslar va Kurslar
+		<motion.div
+			variants={containerVariants}
+			initial='hidden'
+			animate='show'
+			className='max-w-7xl mx-auto space-y-6 w-full pb-12'
+		>
+			{/* HEADER VA QIDIRUV */}
+			<motion.div
+				variants={itemVariants}
+				className='flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card p-6 rounded-2xl border shadow-sm'
+			>
+				<div>
+					<h1 className='text-2xl sm:text-3xl font-bold tracking-tight text-foreground'>
+						Mening Darslarim
 					</h1>
-					<p className='text-muted-foreground'>
-						Platformadagi mavjud darslarni ko'ring va bilimingizni oshiring.
+					<p className='text-muted-foreground text-sm mt-1'>
+						Jonli efirlarga qo'shiling va ustozlaringiz bilan birga o'rganing.
 					</p>
 				</div>
-				<div className='relative w-full sm:w-80'>
-					<Search className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground' />
+			</motion.div>
+
+			{/* FILTERS */}
+			<motion.div
+				variants={itemVariants}
+				className='flex flex-col sm:flex-row items-center justify-between gap-4'
+			>
+				<div className='relative w-full max-w-sm'>
+					<Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
 					<Input
-						placeholder='Dars yoki mentor...'
-						className='pl-10 h-11 bg-muted/20 border-transparent focus-visible:ring-primary/20 rounded-2xl'
+						placeholder='Dars nomi yoki ustoz ismini qidirish...'
+						className='pl-9 bg-card border shadow-sm rounded-xl focus-visible:ring-primary'
 						value={searchQuery}
 						onChange={e => setSearchQuery(e.target.value)}
 					/>
 				</div>
-			</div>
-
-			<Tabs defaultValue='live' className='w-full space-y-8'>
-				<TabsList className='bg-muted/50 p-1.5 rounded-2xl h-14 w-full sm:w-auto flex justify-start gap-2 shadow-inner border border-muted/40'>
-					<TabsTrigger
-						value='live'
-						className='rounded-xl px-6 h-11 font-bold data-[state=active]:bg-background data-[state=active]:shadow-sm'
-					>
-						Jonli darslar
-					</TabsTrigger>
-					<TabsTrigger
-						value='upcoming'
-						className='rounded-xl px-6 h-11 font-bold data-[state=active]:bg-background data-[state=active]:shadow-sm'
-					>
-						Kelgusi darslar
-					</TabsTrigger>
-					<TabsTrigger
-						value='completed'
-						className='rounded-xl px-6 h-11 font-bold data-[state=active]:bg-background data-[state=active]:shadow-sm'
-					>
-						Yakunlangan darslar
-					</TabsTrigger>
-				</TabsList>
-
-				<TabsContent
-					value='live'
-					className='space-y-6 outline-none animate-in fade-in slide-in-from-bottom-2 duration-500'
+				<Badge
+					variant='outline'
+					className='px-3 py-1.5 w-full sm:w-auto justify-center items-center bg-card text-muted-foreground rounded-xl flex whitespace-nowrap border shadow-sm'
 				>
-					{filteredCourses('live').length > 0 ? (
-						filteredCourses('live').map(course => (
-							<CourseCard key={course.id} course={course} />
-						))
-					) : (
-						<div className='text-center py-20 bg-muted/10 rounded-3xl border-2 border-dashed border-muted/30'>
-							<Video className='w-12 h-12 text-muted-foreground/30 mx-auto mb-4' />
-							<p className='text-muted-foreground font-medium'>
-								Ayni damda jonli darslar o'tilmayapti.
-							</p>
-						</div>
-					)}
-				</TabsContent>
+					Jami {filteredLessons.length} ta dars
+				</Badge>
+			</motion.div>
 
-				<TabsContent
-					value='upcoming'
-					className='space-y-6 outline-none animate-in fade-in slide-in-from-bottom-2 duration-500'
+			{/* TABS & TABLE */}
+			<motion.div variants={itemVariants} className='w-full'>
+				<Tabs
+					value={activeTab}
+					onValueChange={handleTabChange}
+					className='w-full'
 				>
-					{filteredCourses('upcoming').length > 0 ? (
-						filteredCourses('upcoming').map(course => (
-							<CourseCard key={course.id} course={course} />
-						))
-					) : (
-						<div className='text-center py-20 bg-muted/10 rounded-3xl border-2 border-dashed border-muted/30'>
-							<Calendar className='w-12 h-12 text-muted-foreground/30 mx-auto mb-4' />
-							<p className='text-muted-foreground font-medium'>
-								Yaqin orada darslar rejalashtirilmagan.
-							</p>
-						</div>
-					)}
-				</TabsContent>
-
-				<TabsContent
-					value='completed'
-					className='space-y-6 outline-none animate-in fade-in slide-in-from-bottom-2 duration-500'
-				>
-					{filteredCourses('completed').length > 0 ? (
-						filteredCourses('completed').map(course => (
-							<CourseCard key={course.id} course={course} />
-						))
-					) : (
-						<div className='text-center py-20 bg-muted/10 rounded-3xl border-2 border-dashed border-muted/30'>
-							<CheckCircle2 className='w-12 h-12 text-muted-foreground/30 mx-auto mb-4' />
-							<p className='text-muted-foreground font-medium'>
-								Hozircha yakunlangan darslar mavjud emas.
-							</p>
-						</div>
-					)}
-				</TabsContent>
-			</Tabs>
-
-			{/* Application Modal */}
-			<Dialog
-				open={applicationModalOpen}
-				onOpenChange={setApplicationModalOpen}
-			>
-				<DialogContent className='sm:max-w-[500px] rounded-3xl overflow-hidden p-0 border-none shadow-2xl'>
-					{!isSuccess ? (
-						<>
-							<div className='h-32 bg-primary relative flex items-center justify-center'>
-								<div className='absolute inset-0 bg-black/10' />
-								<PlusCircle className='w-16 h-16 text-white relative z-10' />
-							</div>
-							<div className='p-6 space-y-6'>
-								<DialogHeader>
-									<DialogTitle className='text-2xl font-bold'>
-										Kursga ariza qoldirish
-									</DialogTitle>
-									<DialogDescription className='text-base'>
-										Siz{' '}
-										<span className='font-bold text-foreground'>
-											"{selectedCourse?.title}"
-										</span>{' '}
-										kursiga a'zo bo'lish uchun so'rov yubormoqchisiz.
-									</DialogDescription>
-								</DialogHeader>
-								<div className='space-y-4'>
-									<div className='flex items-center gap-4 p-4 bg-muted/40 rounded-2xl border border-muted/60'>
-										<div className='w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0'>
-											<Users className='w-5 h-5 text-primary' />
-										</div>
-										<div className='min-w-0'>
-											<p className='text-xs text-muted-foreground font-medium uppercase tracking-wider'>
-												Mentor
-											</p>
-											<p className='font-bold truncate'>
-												{selectedCourse?.mentor}
-											</p>
-										</div>
-									</div>
-									<div className='space-y-2'>
-										<p className='text-sm font-bold px-1'>
-											Qo'shimcha ma'lumot (ixtiyoriy)
-										</p>
-										<Textarea
-											placeholder='Nima uchun bu kursda qatnashmoqchisiz?'
-											className='rounded-2xl bg-muted/20 border-muted/40 min-h-[100px] focus-visible:ring-primary/20'
-										/>
-									</div>
-								</div>
-								<DialogFooter className='sm:justify-between gap-3'>
-									<Button
-										variant='ghost'
-										onClick={() => setApplicationModalOpen(false)}
-										className='rounded-xl font-bold h-12 px-6'
-									>
-										Bekor qilish
-									</Button>
-									<Button
-										onClick={handleApply}
-										disabled={isSubmitting}
-										className='rounded-xl font-bold h-12 px-8 bg-primary shadow-lg shadow-primary/20 flex-1 sm:flex-none'
-									>
-										{isSubmitting
-											? 'Yuborilmoqda...'
-											: 'Tasdiqlash va yuborish'}
-									</Button>
-								</DialogFooter>
-							</div>
-						</>
-					) : (
-						<div className='p-12 flex flex-col items-center text-center space-y-6 animate-in zoom-in-95 duration-300'>
-							<div className='w-24 h-24 rounded-full bg-green-500/10 flex items-center justify-center'>
-								<CheckCircle2 className='w-14 h-14 text-green-500' />
-							</div>
-							<div className='space-y-2'>
-								<h2 className='text-2xl font-bold'>Arizangiz qabul qilindi!</h2>
-								<p className='text-muted-foreground'>
-									Mentor tez orada arizangizni ko'rib chiqadi va sizga xabar
-									beradi.
-								</p>
-							</div>
-							<Button
-								variant='secondary'
-								className='rounded-xl font-bold w-full h-12'
-								onClick={() => setApplicationModalOpen(false)}
+					<div className='w-full overflow-x-auto pb-2 no-scrollbar'>
+						<TabsList className='flex w-max min-w-full sm:w-full md:w-auto h-12 bg-muted/60 rounded-xl p-1'>
+							<TabsTrigger
+								value='live'
+								className='flex-1 rounded-lg text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-red-600 data-[state=active]:shadow-sm font-medium px-3 gap-1.5'
 							>
-								Yopish
-							</Button>
-						</div>
-					)}
-				</DialogContent>
-			</Dialog>
-		</div>
+								<Radio className='w-4 h-4' /> Hozirgi (Live)
+								<span className='flex h-2 w-2 relative ml-1'>
+									<span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75'></span>
+									<span className='relative inline-flex rounded-full h-2 w-2 bg-red-500'></span>
+								</span>
+							</TabsTrigger>
+							<TabsTrigger
+								value='upcoming'
+								className='flex-1 rounded-lg text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm font-medium px-3 gap-1.5'
+							>
+								<Calendar className='w-4 h-4' /> Kelasi Darslar
+							</TabsTrigger>
+							<TabsTrigger
+								value='completed'
+								className='flex-1 rounded-lg text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm font-medium px-3 gap-1.5'
+							>
+								<ClipboardList className='w-4 h-4' /> O'tgan Darslar
+							</TabsTrigger>
+						</TabsList>
+					</div>
+
+					<TabsContent value='live' className='mt-0 focus-visible:outline-none'>
+						{renderTable('live')}
+					</TabsContent>
+
+					<TabsContent
+						value='upcoming'
+						className='mt-0 focus-visible:outline-none'
+					>
+						{renderTable('upcoming')}
+					</TabsContent>
+
+					<TabsContent
+						value='completed'
+						className='mt-0 focus-visible:outline-none'
+					>
+						{renderTable('completed')}
+					</TabsContent>
+				</Tabs>
+			</motion.div>
+		</motion.div>
 	)
 }

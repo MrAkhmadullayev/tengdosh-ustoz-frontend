@@ -3,265 +3,376 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from '@/components/ui/table'
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from '@/components/ui/tooltip'
+import api from '@/lib/api'
+import { motion } from 'framer-motion'
 import {
 	BookOpen,
-	Calendar,
-	Download,
+	GraduationCap,
 	Mail,
-	MessageSquare,
-	MoreHorizontal,
 	Phone,
 	Search,
-	UserCircle,
+	User,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
 
-const MOCK_STUDENTS = [
-	{
-		id: 1,
-		name: 'Madina Akramova',
-		email: 'madina@example.com',
-		phone: '+998 90 111 22 33',
-		joinDate: '12 Yanvar, 2024',
-		course: 'React Advanced',
-		status: 'active',
-		progress: 75,
+// Animatsiya variantlari
+const containerVariants = {
+	hidden: { opacity: 0 },
+	show: {
+		opacity: 1,
+		transition: { staggerChildren: 0.1 },
 	},
-	{
-		id: 2,
-		name: 'Jasur Ahmedov',
-		email: 'jasur@example.com',
-		phone: '+998 91 222 33 44',
-		joinDate: '05 Fevral, 2024',
-		course: 'Next.js & Tailwind',
-		status: 'active',
-		progress: 40,
-	},
-	{
-		id: 3,
-		name: 'Dilnoza Salimova',
-		email: 'dilnoza@example.com',
-		phone: '+998 93 333 44 55',
-		joinDate: '20 Dekabr, 2023',
-		course: 'React Advanced',
-		status: 'completed',
-		progress: 100,
-	},
-	{
-		id: 4,
-		name: "Otabek G'aniyev",
-		email: 'otabek@example.com',
-		phone: '+998 94 444 55 66',
-		joinDate: '01 Mart, 2024',
-		course: 'Next.js & Tailwind',
-		status: 'active',
-		progress: 15,
-	},
-	{
-		id: 5,
-		name: 'Sardor Rahimiv',
-		email: 'sardor@example.com',
-		phone: '+998 99 555 66 77',
-		joinDate: '15 Yanvar, 2024',
-		course: 'Full-Stack JS',
-		status: 'on-hold',
-		progress: 60,
-	},
-]
+}
 
-export default function MentorStudentsPage() {
+const itemVariants = {
+	hidden: { opacity: 0, y: 20 },
+	show: {
+		opacity: 1,
+		y: 0,
+		transition: { type: 'spring', stiffness: 300, damping: 24 },
+	},
+}
+
+const MotionTableRow = motion(TableRow)
+
+// Telefon raqamini formatlash
+const formatPhone = phoneStr => {
+	if (!phoneStr || phoneStr === 'Kiritilmagan') return phoneStr
+	const cleaned = phoneStr.replace(/\D/g, '')
+	if (cleaned.length === 12 && cleaned.startsWith('998')) {
+		return `+998 ${cleaned.slice(3, 5)} ${cleaned.slice(5, 8)} ${cleaned.slice(8, 12)}`
+	}
+	return phoneStr
+}
+
+function MentorStudentsContent() {
+	const router = useRouter()
+	const [students, setStudents] = useState([])
+	const [filteredStudents, setFilteredStudents] = useState([])
+	const [loading, setLoading] = useState(true)
 	const [searchQuery, setSearchQuery] = useState('')
-	const [activeFilter, setActiveFilter] = useState('all')
 
-	const filteredStudents = MOCK_STUDENTS.filter(student => {
-		const matchesSearch =
-			student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			student.email.toLowerCase().includes(searchQuery.toLowerCase())
-		const matchesFilter =
-			activeFilter === 'all' ? true : student.status === activeFilter
-		return matchesSearch && matchesFilter
-	})
-
-	const getStatusBadge = status => {
-		switch (status) {
-			case 'active':
-				return <Badge className='bg-green-500 hover:bg-green-600'>Faol</Badge>
-			case 'completed':
-				return <Badge className='bg-blue-500 hover:bg-blue-600'>Tugatgan</Badge>
-			case 'on-hold':
-				return <Badge variant='secondary'>Kutishda</Badge>
-			default:
-				return <Badge variant='outline'>{status}</Badge>
+	useEffect(() => {
+		const fetchStudents = async () => {
+			try {
+				const res = await api.get('/mentor/students')
+				if (res.data.success) {
+					const mapped = res.data.students.map((s, idx) => ({
+						...s,
+						index: idx + 1,
+						avatar:
+							(s.firstName?.charAt(0) || '') + (s.lastName?.charAt(0) || ''),
+						phoneNumber: s.phoneNumber || 'Kiritilmagan',
+						course: s.course || 'Kurs kiritilmagan',
+						group: s.group || 'Kiritilmagan',
+					}))
+					setStudents(mapped)
+					setFilteredStudents(mapped)
+				}
+			} catch (error) {
+				console.error('Talabalarni olishda xatolik:', error)
+			} finally {
+				setLoading(false)
+			}
 		}
+
+		fetchStudents()
+	}, [])
+
+	useEffect(() => {
+		if (!searchQuery) {
+			setFilteredStudents(students)
+			return
+		}
+
+		const lowerQuery = searchQuery.toLowerCase()
+		const filtered = students.filter(
+			s =>
+				s.firstName?.toLowerCase().includes(lowerQuery) ||
+				s.lastName?.toLowerCase().includes(lowerQuery) ||
+				s.phoneNumber?.toLowerCase().includes(lowerQuery) ||
+				s.course?.toLowerCase().includes(lowerQuery),
+		)
+		setFilteredStudents(filtered)
+	}, [searchQuery, students])
+
+	const handleMessageClick = studentId => {
+		sessionStorage.setItem('selectedContact', studentId) // 'targetMessageId' o'rniga kontakt uchun ishlatilgan key
+		router.push('/users/messages')
 	}
 
 	return (
-		<div className='max-w-7xl mx-auto space-y-8 pb-12'>
-			{/* Header */}
-			<div className='flex flex-col md:flex-row md:items-center justify-between gap-4'>
+		<motion.div
+			variants={containerVariants}
+			initial='hidden'
+			animate='show'
+			className='space-y-6 max-w-7xl mx-auto pb-8'
+		>
+			{/* HEADER QISMI */}
+			<motion.div
+				variants={itemVariants}
+				className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'
+			>
 				<div>
-					<h1 className='text-3xl font-bold tracking-tight'>
-						Mening O'quvchilarim
+					<h1 className='text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2'>
+						<GraduationCap className='h-7 w-7 text-primary' /> Mening
+						O'quvchilarim
 					</h1>
 					<p className='text-muted-foreground mt-1'>
-						Sizning kurslaringizda tahsil olayotgan va sizga obuna bo'lgan
-						talabalar.
+						Sizning darslaringizga yozilgan va qatnashgan barcha talabalar
+						ro'yxati.
 					</p>
 				</div>
-				<div className='flex items-center gap-3'>
-					<Button variant='outline' className='rounded-xl gap-2'>
-						<Download className='w-4 h-4' /> Eksport
-					</Button>
-					<Button className='rounded-xl gap-2 shadow-lg shadow-primary/20'>
-						<MessageSquare className='w-4 h-4' /> Guruhga xabar yuborish
-					</Button>
+				<div className='bg-primary/10 text-primary px-4 py-1 rounded-xl font-bold flex items-center gap-2 border border-primary/20 shadow-sm'>
+					<User className='h-4 w-4' />
+					Jami: {students.length} ta
 				</div>
-			</div>
+			</motion.div>
 
-			{/* Filters & Search */}
-			<Card className='rounded-2xl border-muted/60 shadow-sm'>
-				<CardContent className='p-4 flex flex-col md:flex-row items-center gap-4'>
-					<div className='relative flex-1 w-full'>
-						<Search className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground' />
-						<Input
-							placeholder="O'quvchi ismi yoki email orqali qidirish..."
-							className='pl-10 h-11 bg-muted/20 border-transparent focus-visible:ring-primary/20 rounded-xl'
-							value={searchQuery}
-							onChange={e => setSearchQuery(e.target.value)}
-						/>
-					</div>
-					<div className='flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0'>
-						<Button
-							variant={activeFilter === 'all' ? 'secondary' : 'ghost'}
-							size='sm'
-							className='rounded-lg h-9'
-							onClick={() => setActiveFilter('all')}
-						>
-							Barchasi
-						</Button>
-						<Button
-							variant={activeFilter === 'active' ? 'secondary' : 'ghost'}
-							size='sm'
-							className='rounded-lg h-9'
-							onClick={() => setActiveFilter('active')}
-						>
-							Faol
-						</Button>
-						<Button
-							variant={activeFilter === 'completed' ? 'secondary' : 'ghost'}
-							size='sm'
-							className='rounded-lg h-9'
-							onClick={() => setActiveFilter('completed')}
-						>
-							Tugatgan
-						</Button>
-					</div>
-				</CardContent>
-			</Card>
+			{/* QIDIRUV VA FILTR */}
+			<motion.div
+				variants={itemVariants}
+				className='flex flex-col sm:flex-row sm:items-center justify-between bg-card p-4 rounded-xl border shadow-sm gap-4'
+			>
+				<div className='relative w-full max-w-md'>
+					<Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
+					<Input
+						placeholder="Ism, telefon yoki kurs bo'yicha qidiruv..."
+						className='pl-9 bg-background focus-visible:ring-primary'
+						value={searchQuery}
+						onChange={e => setSearchQuery(e.target.value)}
+					/>
+				</div>
+				<div className='flex items-center gap-2'>
+					<Badge variant='secondary' className='px-3 py-1 text-sm font-medium'>
+						Natija: {filteredStudents.length} ta
+					</Badge>
+				</div>
+			</motion.div>
 
-			{/* Student Grid */}
-			<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
-				{filteredStudents.length > 0 ? (
-					filteredStudents.map(student => (
-						<Card
-							key={student.id}
-							className='group hover:shadow-xl transition-all duration-300 border-muted/60 rounded-3xl overflow-hidden relative bg-card'
-						>
-							<CardContent className='p-6'>
-								<div className='flex justify-between items-start mb-6'>
-									<div className='flex items-center gap-4'>
-										<Avatar className='h-12 w-12 border-2 border-background shadow-md'>
-											<AvatarFallback className='bg-primary/10 text-primary font-bold'>
-												{student.name
-													.split(' ')
-													.map(n => n[0])
-													.join('')}
-											</AvatarFallback>
-										</Avatar>
-										<div>
-											<h3 className='font-bold text-lg group-hover:text-primary transition-colors'>
-												{student.name}
-											</h3>
-											<p className='text-xs text-muted-foreground flex items-center gap-1'>
-												<Calendar className='w-3 h-3' /> {student.joinDate} dan
-												beri
-											</p>
-										</div>
-									</div>
-									<Button
-										variant='ghost'
-										size='icon'
-										className='rounded-full h-8 w-8'
+			{/* JADVAL QISMI */}
+			<motion.div
+				variants={itemVariants}
+				className='bg-card rounded-xl border shadow-sm overflow-hidden'
+			>
+				<div className='overflow-x-auto'>
+					<Table>
+						<TableHeader className='bg-muted/50'>
+							<TableRow>
+								<TableHead className='w-[80px] font-bold'>T/R</TableHead>
+								<TableHead className='font-bold'>Talaba F.I.O</TableHead>
+								<TableHead className='font-bold'>Aloqa</TableHead>
+								<TableHead className='font-bold'>
+									O'quv bosqichi / Guruh
+								</TableHead>
+								<TableHead className='font-bold text-center'>
+									Qatnashishi
+								</TableHead>
+								<TableHead className='text-right font-bold'>
+									Harakatlar
+								</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{loading ? (
+								Array.from({ length: 5 }).map((_, idx) => (
+									<TableRow key={idx}>
+										<TableCell>
+											<Skeleton className='h-4 w-6' />
+										</TableCell>
+										<TableCell>
+											<div className='flex items-center gap-3'>
+												<Skeleton className='h-9 w-9 rounded-full shrink-0' />
+												<div className='space-y-2'>
+													<Skeleton className='h-4 w-32' />
+													<Skeleton className='h-3 w-20' />
+												</div>
+											</div>
+										</TableCell>
+										<TableCell>
+											<Skeleton className='h-4 w-28' />
+										</TableCell>
+										<TableCell>
+											<div className='flex items-center gap-2'>
+												<Skeleton className='h-5 w-16 rounded-full' />
+												<Skeleton className='h-5 w-12 rounded-full' />
+											</div>
+										</TableCell>
+										<TableCell>
+											<Skeleton className='h-6 w-20 mx-auto rounded-full' />
+										</TableCell>
+										<TableCell className='text-right'>
+											<Skeleton className='h-8 w-24 ml-auto rounded-md' />
+										</TableCell>
+									</TableRow>
+								))
+							) : filteredStudents.length > 0 ? (
+								filteredStudents.map(student => (
+									<MotionTableRow
+										key={student.id}
+										variants={itemVariants}
+										className='hover:bg-muted/30 transition-colors'
 									>
-										<MoreHorizontal className='w-4 h-4' />
-									</Button>
-								</div>
+										<TableCell className='font-medium text-muted-foreground'>
+											{student.index}
+										</TableCell>
 
-								<div className='space-y-4'>
-									<div className='space-y-2'>
-										<div className='flex justify-between text-xs font-medium'>
-											<span className='text-muted-foreground flex items-center gap-1'>
-												<BookOpen className='w-3 h-3' /> {student.course}
-											</span>
-											<span className='font-bold'>{student.progress}%</span>
-										</div>
-										<div className='h-1.5 w-full bg-muted rounded-full overflow-hidden'>
-											<div
-												className='h-full bg-primary transition-all duration-1000 ease-out'
-												style={{ width: `${student.progress}%` }}
-											/>
-										</div>
-									</div>
+										<TableCell>
+											<div className='flex items-center gap-3'>
+												<Avatar className='h-9 w-9 border border-background shadow-sm'>
+													<AvatarFallback className='bg-primary/10 text-primary font-bold text-xs uppercase'>
+														{student.avatar}
+													</AvatarFallback>
+												</Avatar>
+												<div>
+													<p className='font-semibold text-foreground leading-none mb-1'>
+														{student.firstName} {student.lastName}
+													</p>
+													<p className='text-[10px] text-muted-foreground uppercase tracking-wider font-semibold md:hidden'>
+														{student.course} • {student.group}
+													</p>
+												</div>
+											</div>
+										</TableCell>
 
-									<div className='grid grid-cols-1 gap-2 border-t pt-4'>
-										<div className='flex items-center gap-2 text-sm text-foreground/80'>
-											<Mail className='w-3.5 h-3.5 text-muted-foreground text-foreground' />
-											<span className='truncate'>{student.email}</span>
-										</div>
-										<div className='flex items-center gap-2 text-sm text-foreground/80'>
-											<Phone className='w-3.5 h-3.5 text-muted-foreground text-foreground' />
-											<span>{student.phone}</span>
-										</div>
-									</div>
+										<TableCell>
+											{student.phoneNumber !== 'Kiritilmagan' ? (
+												<a
+													href={`tel:${student.phoneNumber.replace(/\s+/g, '')}`}
+													className='font-medium whitespace-nowrap text-primary hover:underline flex items-center gap-1.5 w-fit text-sm'
+												>
+													<Phone className='h-3.5 w-3.5' />
+													{formatPhone(student.phoneNumber)}
+												</a>
+											) : (
+												<span className='text-muted-foreground text-sm'>
+													Kiritilmagan
+												</span>
+											)}
+										</TableCell>
 
-									<div className='flex items-center justify-between pt-2'>
-										{getStatusBadge(student.status)}
-										<div className='flex gap-2'>
+										<TableCell className='hidden md:table-cell'>
+											<div className='flex flex-wrap items-center gap-1.5'>
+												<Badge
+													variant='outline'
+													className='font-semibold bg-blue-50 text-blue-700 border-none'
+												>
+													{student.course}
+												</Badge>
+												<Badge
+													variant='secondary'
+													className='font-semibold bg-indigo-50 text-indigo-700 border-none'
+												>
+													{student.group}
+												</Badge>
+											</div>
+										</TableCell>
+
+										<TableCell className='text-center'>
+											<TooltipProvider>
+												<Tooltip>
+													<TooltipTrigger asChild>
+														<Badge
+															variant='secondary'
+															className='bg-green-500/10 text-green-600 hover:bg-green-500/20 border-none font-bold cursor-help px-3 py-1 gap-1.5'
+														>
+															<BookOpen className='h-3.5 w-3.5' />
+															{student.lessonsAttended || 0} ta dars
+														</Badge>
+													</TooltipTrigger>
+													<TooltipContent>
+														Umumiy ro'yxatdan o'tgan yoki qatnashgan darslar
+														soni
+													</TooltipContent>
+												</Tooltip>
+											</TooltipProvider>
+										</TableCell>
+
+										<TableCell className='text-right'>
 											<Button
-												variant='outline'
-												size='icon'
-												className='h-9 w-9 rounded-xl hover:bg-blue-50 hover:text-blue-600 border-muted/60'
+												size='sm'
+												variant='secondary'
+												className='bg-primary/10 text-primary hover:bg-primary hover:text-black transition-colors rounded-lg gap-2 font-semibold'
+												onClick={() => handleMessageClick(student.id)}
 											>
-												<MessageSquare className='w-4 h-4 text-foreground' />
+												<Mail className='h-4 w-4' />
+												<span className='hidden sm:inline'>Xabar yozish</span>
 											</Button>
-											<Button
-												variant='outline'
-												size='icon'
-												className='h-9 w-9 rounded-xl hover:bg-primary/5 hover:text-primary border-muted/60'
-											>
-												<UserCircle className='w-4 h-4 text-foreground' />
-											</Button>
-										</div>
-									</div>
-								</div>
-							</CardContent>
-							<div className='absolute bottom-0 left-0 h-1 w-full bg-primary/10' />
-						</Card>
-					))
-				) : (
-					<div className='col-span-full py-12 text-center'>
-						<div className='bg-muted/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4'>
-							<Search className='w-8 h-8 text-muted-foreground opacity-20' />
-						</div>
-						<h3 className='text-lg font-bold'>O'quvchi topilmadi</h3>
-						<p className='text-muted-foreground'>
-							Qidiruv matnini o'zgartirib ko'ring.
-						</p>
+										</TableCell>
+									</MotionTableRow>
+								))
+							) : (
+								<TableRow>
+									<TableCell
+										colSpan={6}
+										className='h-32 text-center text-muted-foreground'
+									>
+										{searchQuery
+											? 'Qidiruvingizga mos talaba topilmadi.'
+											: 'Sizning darslaringizga hali hech kim yozilmagan.'}
+									</TableCell>
+								</TableRow>
+							)}
+						</TableBody>
+					</Table>
+				</div>
+
+				{/* FOOTER */}
+				<div className='p-4 border-t flex items-center justify-between text-sm text-muted-foreground bg-muted/20'>
+					<p>
+						Jami {filteredStudents.length} ta natijadan 1-
+						{filteredStudents.length} tasi ko'rsatilmoqda.
+					</p>
+					<div className='flex gap-2'>
+						<Button variant='outline' size='sm' disabled>
+							Oldingi
+						</Button>
+						<Button variant='outline' size='sm' disabled>
+							Keyingi
+						</Button>
 					</div>
-				)}
-			</div>
-		</div>
+				</div>
+			</motion.div>
+		</motion.div>
+	)
+}
+
+// Sahifa boshida Skeletonni Suspanse orqali o'rash (Layout va Page renderini toza saqlash uchun)
+export default function MentorStudentsPage() {
+	return (
+		<Suspense
+			fallback={
+				<div className='space-y-6 max-w-7xl mx-auto pb-8 p-6'>
+					<div className='flex justify-between'>
+						<div className='space-y-2'>
+							<Skeleton className='h-8 w-48' />
+							<Skeleton className='h-4 w-64' />
+						</div>
+						<Skeleton className='h-10 w-32 rounded-xl' />
+					</div>
+					<Skeleton className='h-16 w-full rounded-xl' />
+					<Skeleton className='h-[400px] w-full rounded-xl' />
+				</div>
+			}
+		>
+			<MentorStudentsContent />
+		</Suspense>
 	)
 }

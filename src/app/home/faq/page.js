@@ -8,7 +8,9 @@ import {
 	AccordionTrigger,
 } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
+import { motion } from 'framer-motion'
 import { Mail, MessageCircleQuestion } from 'lucide-react'
+import Link from 'next/link'
 
 const FAQ_DATA = [
 	{
@@ -74,14 +76,35 @@ const FAQ_DATA = [
 	},
 ]
 
+const containerVariants = {
+	hidden: { opacity: 0 },
+	show: {
+		opacity: 1,
+		transition: { staggerChildren: 0.1 },
+	},
+}
+
+const itemVariants = {
+	hidden: { opacity: 0, y: 20 },
+	show: {
+		opacity: 1,
+		y: 0,
+		transition: { type: 'spring', stiffness: 300, damping: 24 },
+	},
+}
+
 export default function FAQPage() {
 	return (
 		<div className='min-h-screen bg-background flex flex-col'>
 			<Navbar />
 
 			<main className='container mx-auto px-4 py-12 md:py-20 max-w-4xl flex-1'>
-				{/* HEADER SECTION */}
-				<div className='text-center mb-12'>
+				<motion.div
+					initial={{ opacity: 0, y: -20 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: 0.5 }}
+					className='text-center mb-12'
+				>
 					<div className='inline-flex items-center justify-center p-3 bg-primary/10 rounded-full mb-4'>
 						<MessageCircleQuestion className='h-8 w-8 text-primary' />
 					</div>
@@ -92,30 +115,40 @@ export default function FAQPage() {
 						Platforma qanday ishlashi, mentorlik va dars jarayonlari haqida
 						barcha savollaringizga shu yerdan javob topishingiz mumkin.
 					</p>
-				</div>
+				</motion.div>
 
-				{/* ACCORDION SECTION */}
-				<div className='bg-card border rounded-2xl p-4 md:p-8 shadow-sm'>
+				<motion.div
+					variants={containerVariants}
+					initial='hidden'
+					animate='show'
+					className='bg-card border rounded-2xl p-4 md:p-8 shadow-sm'
+				>
 					<Accordion type='single' collapsible className='w-full'>
 						{FAQ_DATA.map(faq => (
-							<AccordionItem
-								key={faq.value}
-								value={faq.value}
-								className='border-b last:border-none'
-							>
-								<AccordionTrigger className='text-left font-semibold text-base md:text-lg py-5 hover:text-primary transition-colors'>
-									{faq.question}
-								</AccordionTrigger>
-								<AccordionContent className='text-muted-foreground text-[15px] leading-relaxed pb-5 pr-8'>
-									{faq.answer}
-								</AccordionContent>
-							</AccordionItem>
+							<motion.div variants={itemVariants} key={faq.value}>
+								<AccordionItem
+									value={faq.value}
+									className='border-b last:border-none'
+								>
+									<AccordionTrigger className='text-left font-semibold text-base md:text-lg py-5 hover:text-primary transition-colors'>
+										{faq.question}
+									</AccordionTrigger>
+									<AccordionContent className='text-muted-foreground text-[15px] leading-relaxed pb-5 pr-8'>
+										{faq.answer}
+									</AccordionContent>
+								</AccordionItem>
+							</motion.div>
 						))}
 					</Accordion>
-				</div>
+				</motion.div>
 
-				{/* BOSHQA SAVOLLAR UCHUN CONTACT SECTION */}
-				<div className='mt-16 bg-muted/50 border rounded-2xl p-8 text-center flex flex-col items-center'>
+				<motion.div
+					initial={{ opacity: 0, y: 30 }}
+					whileInView={{ opacity: 1, y: 0 }}
+					viewport={{ once: true }}
+					transition={{ duration: 0.5 }}
+					className='mt-16 bg-muted/50 border rounded-2xl p-8 text-center flex flex-col items-center'
+				>
 					<h3 className='text-xl font-bold mb-2'>
 						Savolingizga javob topmadingizmi?
 					</h3>
@@ -123,10 +156,15 @@ export default function FAQPage() {
 						Bizning qo'llab-quvvatlash xizmatimiz sizga yordam berishga doim
 						tayyor. Biz bilan bog'laning!
 					</p>
-					<Button size='lg' className='gap-2'>
-						<Mail className='h-4 w-4' /> Aloqaga chiqish
-					</Button>
-				</div>
+					<Link href='/home/support'>
+						<Button
+							size='lg'
+							className='gap-2 transition-transform hover:scale-105'
+						>
+							<Mail className='h-4 w-4' /> Qo'llab-quvvatlashga yozish
+						</Button>
+					</Link>
+				</motion.div>
 			</main>
 		</div>
 	)

@@ -1,5 +1,6 @@
 'use client'
 
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,11 +15,10 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
-	DropdownMenuLabel,
-	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
 	Table,
 	TableBody,
@@ -28,114 +28,238 @@ import {
 	TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import api from '@/lib/api'
+import { motion } from 'framer-motion'
 import {
+	AlertTriangle,
 	Calendar,
 	ClipboardList,
 	Clock,
 	Eye,
+	Loader2,
 	MapPin,
 	MoreHorizontal,
 	Pencil,
+	Play,
 	Plus,
 	Radio,
 	Search,
+	Square,
 	Trash2,
-	User,
 	Users,
 	Video,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
-// Boshlang'ich Mock Dastlabki Ma'lumotlar
-const INITIAL_LESSONS = [
-	{
-		id: 'LSN-101',
-		title: 'Frontend arxitekturasi asosi (React)',
-		mentor: "Javohir To'rayev",
-		date: '2026-03-01',
-		time: '15:00',
-		format: 'online',
-		allowComments: true,
-		roomNumber: '',
-		enrolled: 45,
-		status: 'live',
+const containerVariants = {
+	hidden: { opacity: 0 },
+	show: {
+		opacity: 1,
+		transition: { staggerChildren: 0.1 },
 	},
-	{
-		id: 'LSN-102',
-		title: "Node.js va Express Boshlang'ich",
-		mentor: "Olimjon G'aniyev",
-		date: '2026-03-05',
-		time: '18:00',
-		format: 'hybrid',
-		allowComments: false,
-		roomNumber: 'A-102 Xona',
-		enrolled: 120,
-		status: 'upcoming',
+}
+
+const itemVariants = {
+	hidden: { opacity: 0, y: 20 },
+	show: {
+		opacity: 1,
+		y: 0,
+		transition: { type: 'spring', stiffness: 300, damping: 24 },
 	},
-	{
-		id: 'LSN-103',
-		title: 'Figma Componentlarini yasash',
-		mentor: 'Shaxnoza Karimova',
-		date: '2026-02-25',
-		time: '14:00',
-		format: 'offline',
-		allowComments: true,
-		roomNumber: 'B-305 Xona',
-		enrolled: 80,
-		status: 'completed',
-	},
+}
+
+const MotionTableRow = motion(TableRow)
+
+const MONTHS = [
+	'Yanvar',
+	'Fevral',
+	'Mart',
+	'Aprel',
+	'May',
+	'Iyun',
+	'Iyul',
+	'Avgust',
+	'Sentabr',
+	'Oktabr',
+	'Noyabr',
+	'Dekabr',
 ]
+
+const formatUzDate = dateStr => {
+	if (!dateStr) return '-'
+	try {
+		const d = new Date(dateStr)
+		if (isNaN(d.getTime())) return dateStr
+		return `${d.getDate()}-${MONTHS[d.getMonth()]}, ${d.getFullYear()}`
+	} catch {
+		return dateStr
+	}
+}
 
 export default function AdminLessonsPage() {
 	const router = useRouter()
-	const [lessons, setLessons] = useState(INITIAL_LESSONS)
+	const [lessons, setLessons] = useState([])
+	const [loading, setLoading] = useState(true)
 	const [searchQuery, setSearchQuery] = useState('')
+	const [activeTab, setActiveTab] = useState('upcoming')
 
-	// Modallar holati faqat o'chirish uchun
+	// Modal states
+	const [actionLesson, setActionLesson] = useState(null)
 	const [isDeleteOpen, setIsDeleteOpen] = useState(false)
-	const [currentLesson, setCurrentLesson] = useState(null)
+	const [isEndOpen, setIsEndOpen] = useState(false)
+	const [isProcessing, setIsProcessing] = useState(false)
+	const [modalError, setModalError] = useState('')
 
-	// Table uchun qidiruv
-	const filteredLessons = lessons.filter(
-		l =>
-			l.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			l.mentor.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			l.id.toLowerCase().includes(searchQuery.toLowerCase()),
-	)
+	useEffect(() => {
+		const savedTab = localStorage.getItem('adminLessonsTab')
+		if (savedTab && ['live', 'upcoming', 'completed'].includes(savedTab)) {
+			setActiveTab(savedTab)
+		}
+	}, [])
 
-	// DELETE LOGIC
+	const handleTabChange = value => {
+		setActiveTab(value)
+		localStorage.setItem('adminLessonsTab', value)
+	}
+
+	const fetchLessons = async () => {
+		try {
+			setLoading(true)
+			const res = await api.get('/admin/lessons')
+			if (res?.data?.success) {
+				setLessons(res.data.lessons)
+			}
+		} catch (error) {
+			console.error('Darslarni yuklashda xatolik:', error)
+		} finally {
+			setLoading(false)
+		}
+	}
+
+	useEffect(() => {
+		fetchLessons()
+	}, [])
+
+	const checkStatus = lesson => {
+		if (lesson.status === 'live') return 'live'
+		if (lesson.status === 'completed') return 'completed'
+
+		try {
+			const lessonDate = new Date(
+				`${lesson.date.split('T')[0]}T${lesson.time}:00`,
+			)
+			const now = new Date()
+			const timeDiff = lessonDate.getTime() - now.getTime()
+
+			if (timeDiff > 0) return 'upcoming'
+			if (timeDiff < -10800000) return 'completed' // 3 soatdan oshib ketsa
+			return 'upcoming'
+		} catch {
+			return lesson.status || 'upcoming'
+		}
+	}
+
+	const filteredLessons = lessons.filter(l => {
+		const searchLower = searchQuery.toLowerCase()
+		return (
+			(l.title || '').toLowerCase().includes(searchLower) ||
+			(l.mentorName || '').toLowerCase().includes(searchLower) ||
+			(l.id || '').toLowerCase().includes(searchLower)
+		)
+	})
+
+	// --- ROW CLICK LOGIC ---
+	const handleRowClick = (lessonId, statusTab) => {
+		if (statusTab === 'live') {
+			router.push(`/admin/lessons/${lessonId}/watch`)
+		} else {
+			router.push(`/admin/lessons/${lessonId}/view`)
+		}
+	}
+
+	// --- END LESSON LOGIC ---
+	const handleEndClick = lesson => {
+		setActionLesson(lesson)
+		setModalError('')
+		setIsEndOpen(true)
+	}
+
+	const confirmEndLesson = async () => {
+		if (!actionLesson) return
+		setIsProcessing(true)
+		setModalError('')
+		try {
+			const res = await api.patch(`/admin/lessons/${actionLesson.id}/end`)
+			if (res?.data?.success) {
+				setIsEndOpen(false)
+				fetchLessons()
+			}
+		} catch (error) {
+			console.error(error)
+			setModalError(
+				error.response?.data?.message || 'Darsni yakunlashda xatolik yuz berdi',
+			)
+		} finally {
+			setIsProcessing(false)
+		}
+	}
+
+	// --- DELETE LOGIC ---
 	const handleDeleteClick = lesson => {
-		setCurrentLesson(lesson)
+		setActionLesson(lesson)
+		setModalError('')
 		setIsDeleteOpen(true)
 	}
 
-	const handleConfirmDelete = () => {
-		setLessons(lessons.filter(l => l.id !== currentLesson.id))
-		setIsDeleteOpen(false)
-		setCurrentLesson(null)
+	const confirmDelete = async () => {
+		if (!actionLesson) return
+		setIsProcessing(true)
+		setModalError('')
+		try {
+			const res = await api.delete(`/admin/lessons/${actionLesson.id}`)
+			if (res?.data?.success) {
+				setIsDeleteOpen(false)
+				fetchLessons()
+			}
+		} catch (error) {
+			console.error(error)
+			setModalError(
+				error.response?.data?.message || "O'chirishda xatolik yuz berdi",
+			)
+		} finally {
+			setIsProcessing(false)
+		}
 	}
 
-	// Helper badge colors
 	const getFormatBadge = format => {
 		switch (format) {
 			case 'online':
 				return (
-					<div className='flex items-center gap-1.5 text-xs font-medium text-blue-600'>
-						<Video className='h-3.5 w-3.5' /> Masofaviy
-					</div>
+					<Badge
+						variant='outline'
+						className='flex w-fit items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 border-blue-200'
+					>
+						<Video className='h-3 w-3' /> Masofaviy
+					</Badge>
 				)
 			case 'offline':
 				return (
-					<div className='flex items-center gap-1.5 text-xs font-medium text-orange-600'>
-						<MapPin className='h-3.5 w-3.5' /> Markazda
-					</div>
+					<Badge
+						variant='outline'
+						className='flex w-fit items-center gap-1.5 text-xs font-medium text-orange-600 bg-orange-50 border-orange-200'
+					>
+						<MapPin className='h-3 w-3' /> Markazda
+					</Badge>
 				)
 			case 'hybrid':
 				return (
-					<div className='flex items-center gap-1.5 text-xs font-medium text-purple-600'>
-						<Users className='h-3.5 w-3.5' /> Gibrid
-					</div>
+					<Badge
+						variant='outline'
+						className='flex w-fit items-center gap-1.5 text-xs font-medium text-purple-600 bg-purple-50 border-purple-200'
+					>
+						<Users className='h-3 w-3' /> Gibrid
+					</Badge>
 				)
 			default:
 				return null
@@ -143,32 +267,33 @@ export default function AdminLessonsPage() {
 	}
 
 	const renderTable = statusTab => {
-		const tabLessons = filteredLessons.filter(l => l.status === statusTab)
+		const tabLessons = filteredLessons.filter(l => checkStatus(l) === statusTab)
 
 		return (
-			<div className='bg-card rounded-2xl border shadow-sm overflow-hidden mt-2'>
+			<motion.div
+				variants={itemVariants}
+				initial='hidden'
+				animate='show'
+				className='bg-card rounded-xl border shadow-sm overflow-hidden mt-4'
+			>
 				<div className='overflow-x-auto'>
 					<Table>
-						<TableHeader className='bg-muted/30'>
+						<TableHeader className='bg-muted/50'>
 							<TableRow className='hover:bg-transparent'>
-								<TableHead className='w-[100px] whitespace-nowrap font-semibold'>
-									ID
+								<TableHead className='w-[60px] whitespace-nowrap font-semibold'>
+									T/R
 								</TableHead>
-								<TableHead className='font-semibold min-w-[250px]'>
+								<TableHead className='font-semibold min-w-[200px]'>
 									Dars Nomi
 								</TableHead>
 								<TableHead className='font-semibold whitespace-nowrap'>
 									Sana va Vaqt
 								</TableHead>
-								{statusTab !== 'upcoming' && (
-									<TableHead className='font-semibold whitespace-nowrap'>
-										{statusTab === 'live'
-											? 'Hozirgi Oquvchilar'
-											: 'Qatnashganlar'}
-									</TableHead>
-								)}
 								<TableHead className='font-semibold whitespace-nowrap'>
-									Izohlar (Sharh)
+									O'quvchilar
+								</TableHead>
+								<TableHead className='font-semibold whitespace-nowrap'>
+									Format
 								</TableHead>
 								<TableHead className='text-right font-semibold whitespace-nowrap'>
 									Sozlamalar
@@ -176,33 +301,68 @@ export default function AdminLessonsPage() {
 							</TableRow>
 						</TableHeader>
 						<TableBody>
-							{tabLessons.length > 0 ? (
-								tabLessons.map(lesson => (
-									<TableRow
-										key={lesson.id}
-										className='hover:bg-muted/30 transition-colors'
-									>
-										<TableCell className='font-mono text-xs text-muted-foreground py-4'>
-											{lesson.id}
+							{loading ? (
+								Array.from({ length: 5 }).map((_, idx) => (
+									<TableRow key={idx}>
+										<TableCell>
+											<Skeleton className='h-4 w-8' />
 										</TableCell>
-										<TableCell className='py-4'>
+										<TableCell>
+											<div className='space-y-2'>
+												<Skeleton className='h-5 w-48' />
+												<Skeleton className='h-4 w-32' />
+											</div>
+										</TableCell>
+										<TableCell>
+											<div className='space-y-2'>
+												<Skeleton className='h-4 w-24' />
+												<Skeleton className='h-3 w-16' />
+											</div>
+										</TableCell>
+										<TableCell>
+											<Skeleton className='h-5 w-16' />
+										</TableCell>
+										<TableCell>
+											<Skeleton className='h-6 w-24 rounded-full' />
+										</TableCell>
+										<TableCell className='text-right'>
+											<Skeleton className='h-8 w-8 ml-auto rounded-md' />
+										</TableCell>
+									</TableRow>
+								))
+							) : tabLessons.length > 0 ? (
+								tabLessons.map((lesson, index) => (
+									<MotionTableRow
+										key={lesson.id}
+										variants={itemVariants}
+										className='hover:bg-muted/30 transition-colors cursor-pointer group'
+										onClick={() => handleRowClick(lesson.id, statusTab)}
+									>
+										<TableCell className='font-medium text-muted-foreground py-4'>
+											{index + 1}
+										</TableCell>
+										<TableCell>
 											<div>
-												<p className='font-bold text-foreground leading-tight mb-1'>
+												<p className='font-bold text-foreground leading-tight mb-1 capitalize line-clamp-2 group-hover:text-primary transition-colors'>
 													{lesson.title}
 												</p>
-												<div className='flex items-center gap-3 mt-1'>
-													<span className='text-xs font-medium text-muted-foreground flex items-center gap-1.5'>
-														<User className='h-3.5 w-3.5' /> {lesson.mentor}
+												<div className='flex items-center gap-2 mt-1.5'>
+													<Avatar className='h-5 w-5'>
+														<AvatarFallback className='text-[10px] bg-primary/10 text-primary'>
+															{lesson.mentorName?.[0] || 'U'}
+														</AvatarFallback>
+													</Avatar>
+													<span className='text-xs font-medium text-muted-foreground capitalize'>
+														{lesson.mentorName}
 													</span>
-													{getFormatBadge(lesson.format)}
 												</div>
 											</div>
 										</TableCell>
-										<TableCell className='py-4'>
+										<TableCell>
 											<div className='space-y-1.5'>
 												<div className='flex items-center gap-1.5 text-sm font-medium'>
-													<Calendar className='h-3.5 w-3.5 text-muted-foreground' />
-													{lesson.date}
+													<Calendar className='h-3.5 w-3.5 text-primary' />
+													{formatUzDate(lesson.date)}
 												</div>
 												<div className='flex items-center gap-1.5 text-xs text-muted-foreground'>
 													<Clock className='h-3.5 w-3.5' />
@@ -210,32 +370,18 @@ export default function AdminLessonsPage() {
 												</div>
 											</div>
 										</TableCell>
-										{statusTab !== 'upcoming' && (
-											<TableCell className='py-4'>
-												<div className='flex items-center gap-1.5 font-medium text-sm'>
-													<Users className='h-4 w-4 text-primary' />{' '}
-													{lesson.enrolled}
-												</div>
-											</TableCell>
-										)}
-										<TableCell className='py-4'>
-											{lesson.allowComments ? (
-												<Badge
-													variant='outline'
-													className='text-green-600 bg-green-50 border-green-200'
-												>
-													Ruxsat etilgan
-												</Badge>
-											) : (
-												<Badge
-													variant='outline'
-													className='text-muted-foreground'
-												>
-													O'chirilgan
-												</Badge>
-											)}
+										<TableCell>
+											<div className='flex items-center gap-1.5 font-medium text-sm'>
+												<Users className='h-4 w-4 text-muted-foreground' />{' '}
+												{lesson.registeredCount || 0} /{' '}
+												{lesson.maxStudents || 0}
+											</div>
 										</TableCell>
-										<TableCell className='text-right py-4'>
+										<TableCell>{getFormatBadge(lesson.format)}</TableCell>
+										<TableCell
+											className='text-right py-4'
+											onClick={e => e.stopPropagation()}
+										>
 											<DropdownMenu>
 												<DropdownMenuTrigger asChild>
 													<Button
@@ -246,73 +392,65 @@ export default function AdminLessonsPage() {
 														<MoreHorizontal className='h-4 w-4' />
 													</Button>
 												</DropdownMenuTrigger>
-												<DropdownMenuContent
-													align='end'
-													className='w-48 rounded-xl'
-												>
-													<DropdownMenuLabel className='text-xs text-muted-foreground'>
-														Boshaqaruv
-													</DropdownMenuLabel>
-													<DropdownMenuSeparator />
-
-													{statusTab === 'live' && (
-														<DropdownMenuItem
-															className='cursor-pointer py-2.5 text-blue-600 focus:text-blue-700 bg-blue-50/50 focus:bg-blue-100 font-medium'
-															onClick={() =>
-																router.push(`/admin/lessons/${lesson.id}/watch`)
-															}
-														>
-															<Radio className='h-4 w-4 mr-2' /> Kuzatish
-														</DropdownMenuItem>
-													)}
-													{statusTab === 'completed' && (
-														<DropdownMenuItem
-															className='cursor-pointer py-2.5 text-purple-600 focus:text-purple-700 font-medium'
-															onClick={() =>
-																router.push(
-																	`/admin/lessons/${lesson.id}/students`,
-																)
-															}
-														>
-															<ClipboardList className='h-4 w-4 mr-2' />{' '}
-															O'quvchilar ro'yxati
-														</DropdownMenuItem>
-													)}
-
+												<DropdownMenuContent align='end' className='w-40'>
 													<DropdownMenuItem
-														className='cursor-pointer py-2.5'
+														className='cursor-pointer'
 														onClick={() =>
 															router.push(`/admin/lessons/${lesson.id}/view`)
 														}
 													>
-														<Eye className='h-4 w-4 mr-2 text-muted-foreground' />{' '}
-														Ko'rish / Ulashish
+														<Eye className='h-4 w-4 mr-2' />
+														Ko'rish
 													</DropdownMenuItem>
+
+													{statusTab === 'live' && (
+														<DropdownMenuItem
+															onClick={() =>
+																router.push(`/admin/lessons/${lesson.id}/watch`)
+															}
+															className='cursor-pointer text-blue-600 focus:text-blue-600 focus:bg-blue-50'
+														>
+															<Play className='h-4 w-4 mr-2' />
+															Kuzatish
+														</DropdownMenuItem>
+													)}
+
 													<DropdownMenuItem
-														className='cursor-pointer py-2.5'
+														className='cursor-pointer'
 														onClick={() =>
 															router.push(`/admin/lessons/${lesson.id}/edit`)
 														}
 													>
-														<Pencil className='h-4 w-4 mr-2 text-blue-500' />{' '}
+														<Pencil className='h-4 w-4 mr-2' />
 														Tahrirlash
 													</DropdownMenuItem>
-													<DropdownMenuSeparator />
-													<DropdownMenuItem
-														className='cursor-pointer text-red-600 focus:text-red-700 py-2.5 focus:bg-red-50'
-														onClick={() => handleDeleteClick(lesson)}
-													>
-														<Trash2 className='h-4 w-4 mr-2' /> Darsni O'chirish
-													</DropdownMenuItem>
+
+													{statusTab === 'live' ? (
+														<DropdownMenuItem
+															onClick={() => handleEndClick(lesson)}
+															className='cursor-pointer text-orange-600 focus:text-orange-600 focus:bg-orange-50'
+														>
+															<Square className='h-4 w-4 mr-2 fill-current' />
+															Yakunlash
+														</DropdownMenuItem>
+													) : (
+														<DropdownMenuItem
+															onClick={() => handleDeleteClick(lesson)}
+															className='cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50'
+														>
+															<Trash2 className='h-4 w-4 mr-2' />
+															O'chirish
+														</DropdownMenuItem>
+													)}
 												</DropdownMenuContent>
 											</DropdownMenu>
 										</TableCell>
-									</TableRow>
+									</MotionTableRow>
 								))
 							) : (
 								<TableRow>
 									<TableCell
-										colSpan={statusTab === 'upcoming' ? 5 : 6}
+										colSpan={6}
 										className='h-32 text-center text-muted-foreground'
 									>
 										Bu bo'limda hech qanday dars topilmadi.
@@ -322,14 +460,125 @@ export default function AdminLessonsPage() {
 						</TableBody>
 					</Table>
 				</div>
-			</div>
+			</motion.div>
 		)
 	}
 
 	return (
-		<div className='w-full max-w-7xl mx-auto space-y-6 pb-12'>
+		<motion.div
+			variants={containerVariants}
+			initial='hidden'
+			animate='show'
+			className='w-full max-w-7xl mx-auto space-y-6 pb-12'
+		>
+			{/* END LESSON MODAL */}
+			<Dialog open={isEndOpen} onOpenChange={setIsEndOpen}>
+				<DialogContent className='sm:max-w-md border-orange-500/20'>
+					<DialogHeader>
+						<div className='flex items-center gap-3'>
+							<div className='bg-orange-500/10 p-3 rounded-full shrink-0 flex items-center justify-center'>
+								<Square className='h-6 w-6 text-orange-600 fill-current' />
+							</div>
+							<DialogTitle className='text-orange-600 text-lg font-bold'>
+								Darsni yakunlash
+							</DialogTitle>
+						</div>
+						<DialogDescription className='mt-3 text-base text-left'>
+							Haqiqatdan ham{' '}
+							<strong className='text-foreground'>
+								"{actionLesson?.title}"
+							</strong>{' '}
+							darsini hozirdanoq yakunlashni tasdiqlaysizmi? Bu dars statusini
+							"Yakunlangan" ga o'zgartiradi.
+						</DialogDescription>
+					</DialogHeader>
+					{modalError && (
+						<div className='bg-destructive/10 text-destructive text-sm font-medium px-4 py-3 rounded-lg mt-2'>
+							{modalError}
+						</div>
+					)}
+					<DialogFooter className='mt-4 flex flex-col sm:flex-row gap-2'>
+						<Button
+							variant='outline'
+							onClick={() => setIsEndOpen(false)}
+							disabled={isProcessing}
+							className='w-full sm:w-auto font-medium'
+						>
+							Bekor qilish
+						</Button>
+						<Button
+							onClick={confirmEndLesson}
+							disabled={isProcessing}
+							className='w-full sm:w-auto font-medium gap-2 bg-orange-600 hover:bg-orange-700 text-white shadow-sm'
+						>
+							{isProcessing ? (
+								<Loader2 className='h-4 w-4 animate-spin' />
+							) : (
+								<Square className='h-4 w-4 fill-current' />
+							)}
+							Yakunlash
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* DELETE MODAL */}
+			<Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+				<DialogContent className='sm:max-w-md border-destructive/20'>
+					<DialogHeader>
+						<div className='flex items-center gap-3'>
+							<div className='bg-destructive/10 p-3 rounded-full shrink-0 flex items-center justify-center'>
+								<AlertTriangle className='h-6 w-6 text-destructive' />
+							</div>
+							<DialogTitle className='text-destructive text-lg font-bold'>
+								Darsni o'chirish
+							</DialogTitle>
+						</div>
+						<DialogDescription className='mt-3 text-base text-left'>
+							Haqiqatdan ham{' '}
+							<strong className='text-foreground'>
+								"{actionLesson?.title}"
+							</strong>{' '}
+							nomli darsni butunlay e'tibordan olib tashlamoqchimisiz? Bu amalni
+							orqaga qaytarib bo'lmaydi va barcha yozilgan talabalar uziladi.
+						</DialogDescription>
+					</DialogHeader>
+					{modalError && (
+						<div className='bg-destructive/10 text-destructive text-sm font-medium px-4 py-3 rounded-lg mt-2'>
+							{modalError}
+						</div>
+					)}
+					<DialogFooter className='mt-4 flex flex-col sm:flex-row gap-2'>
+						<Button
+							variant='outline'
+							onClick={() => setIsDeleteOpen(false)}
+							disabled={isProcessing}
+							className='w-full sm:w-auto font-medium'
+						>
+							Bekor qilish
+						</Button>
+						<Button
+							variant='destructive'
+							onClick={confirmDelete}
+							disabled={isProcessing}
+							className='w-full sm:w-auto font-medium gap-2 shadow-sm'
+						>
+							{isProcessing ? (
+								<Loader2 className='h-4 w-4 animate-spin' />
+							) : (
+								<Trash2 className='h-4 w-4' />
+							)}
+							O'chirish
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
 			{/* HEADER VA QIDIRUV */}
-			<div className='flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card p-6 rounded-2xl border shadow-sm'>
+			<motion.div
+				variants={itemVariants}
+				className='flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card p-6 rounded-2xl border shadow-sm'
+			>
 				<div>
 					<h1 className='text-2xl sm:text-3xl font-bold tracking-tight text-foreground'>
 						Darslar bazasi
@@ -347,76 +596,77 @@ export default function AdminLessonsPage() {
 						<Plus className='h-4 w-4' /> Yangi Dars Yaratish
 					</Button>
 				</div>
-			</div>
+			</motion.div>
 
 			{/* FILTERS */}
-			<div className='flex items-center justify-between gap-4'>
+			<motion.div
+				variants={itemVariants}
+				className='flex flex-col sm:flex-row items-center justify-between gap-4'
+			>
 				<div className='relative w-full max-w-sm'>
 					<Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
 					<Input
-						placeholder='Dars ID, Nomi yoki Mentorini qidirish...'
-						className='pl-9 bg-card border-none shadow-sm rounded-xl h-11'
+						placeholder='Dars nomi, ID yoki Mentorini qidirish...'
+						className='pl-9 bg-card border shadow-sm rounded-xl'
 						value={searchQuery}
 						onChange={e => setSearchQuery(e.target.value)}
 					/>
 				</div>
 				<Badge
 					variant='outline'
-					className='px-3 py-1.5 h-11 items-center bg-card text-muted-foreground rounded-xl flex whitespace-nowrap'
+					className='px-3 py-1.5 w-full sm:w-auto justify-center items-center bg-card text-muted-foreground rounded-xl flex whitespace-nowrap border shadow-sm'
 				>
 					Jami {filteredLessons.length} ta dars
 				</Badge>
-			</div>
+			</motion.div>
 
-			<Tabs defaultValue='live' className='w-full'>
-				<TabsList className='grid w-full grid-cols-3 md:max-w-[480px] h-12 bg-muted/60 rounded-xl p-1 mb-6'>
-					<TabsTrigger
-						value='live'
-						className='rounded-lg h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm'
-					>
-						<Radio className='w-4 h-4 mr-2' /> Hozirgi darslar
-					</TabsTrigger>
-					<TabsTrigger
+			{/* TABS */}
+			<motion.div variants={itemVariants} className='w-full'>
+				<Tabs
+					value={activeTab}
+					onValueChange={handleTabChange}
+					className='w-full'
+				>
+					{/* Scrollable on small screens */}
+					<div className='w-full overflow-x-auto pb-2 no-scrollbar'>
+						<TabsList className='flex w-max min-w-full sm:w-full md:w-auto h-12 bg-muted/60 rounded-xl p-1'>
+							<TabsTrigger
+								value='live'
+								className='flex-1 rounded-lg  text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm font-medium px-3'
+							>
+								<Radio /> Hozirgi darslar
+							</TabsTrigger>
+							<TabsTrigger
+								value='upcoming'
+								className='flex-1 rounded-lg  text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm font-medium px-3'
+							>
+								<Calendar /> Kelasi darslar
+							</TabsTrigger>
+							<TabsTrigger
+								value='completed'
+								className='flex-1 rounded-lg  text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm font-medium px-3'
+							>
+								<ClipboardList /> O'tgan darslar
+							</TabsTrigger>
+						</TabsList>
+					</div>
+					<TabsContent value='live' className='mt-0 focus-visible:outline-none'>
+						{renderTable('live')}
+					</TabsContent>
+					<TabsContent
 						value='upcoming'
-						className='rounded-lg h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm'
+						className='mt-0 focus-visible:outline-none'
 					>
-						<Calendar className='w-4 h-4 mr-2' /> Kelasi darslar
-					</TabsTrigger>
-					<TabsTrigger
+						{renderTable('upcoming')}
+					</TabsContent>
+					<TabsContent
 						value='completed'
-						className='rounded-lg h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm'
+						className='mt-0 focus-visible:outline-none'
 					>
-						<ClipboardList className='w-4 h-4 mr-2' /> O'tgan darslar
-					</TabsTrigger>
-				</TabsList>
-				<TabsContent value='live'>{renderTable('live')}</TabsContent>
-				<TabsContent value='upcoming'>{renderTable('upcoming')}</TabsContent>
-				<TabsContent value='completed'>{renderTable('completed')}</TabsContent>
-			</Tabs>
-
-			{/* DELETE CONFIRM DIALOG */}
-			<Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-				<DialogContent className='sm:max-w-[425px]'>
-					<DialogHeader>
-						<DialogTitle className='text-red-600 flex items-center gap-2'>
-							<Trash2 className='h-5 w-5' /> Darsni o'chirishni tasdiqlang
-						</DialogTitle>
-						<DialogDescription className='pt-2'>
-							Haqiqatdan ham <b>"{currentLesson?.title}"</b> nomli darsni
-							butunlay e'tibordan olib tashlamoqchimisiz? Bu amalni orqaga
-							qaytarib bo'lmaydi va barcha yozilgan talabalar uziladi.
-						</DialogDescription>
-					</DialogHeader>
-					<DialogFooter className='mt-4 gap-2 sm:gap-0'>
-						<Button variant='outline' onClick={() => setIsDeleteOpen(false)}>
-							Yo'q, Adashdim
-						</Button>
-						<Button variant='destructive' onClick={handleConfirmDelete}>
-							Xa, O'chirilsin
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
-		</div>
+						{renderTable('completed')}
+					</TabsContent>
+				</Tabs>
+			</motion.div>
+		</motion.div>
 	)
 }

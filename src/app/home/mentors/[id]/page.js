@@ -1,158 +1,306 @@
+'use client'
+
 import Navbar from '@/components/landing/Navbar'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
+import api from '@/lib/api'
+import { motion } from 'framer-motion'
 import {
 	ArrowLeft,
 	BookOpen,
 	Briefcase,
+	Calendar,
 	CheckCircle,
+	CheckCircle2,
 	Clock,
+	ExternalLink,
 	Globe,
 	GraduationCap,
+	Heart,
+	LogIn,
 	MessageSquare,
 	PlayCircle,
+	Send,
 	Star,
 	UserPlus,
+	Users,
 } from 'lucide-react'
 import Link from 'next/link'
+import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
-// Vaqtinchalik ma'lumotlar (Mock Data)
-const MENTORS = [
-	{
-		id: 1,
-		name: 'Sardor R.',
-		course: '2-kurs',
-		specialty: 'Full-Stack Dasturlash',
-		skills: ['React', 'Node.js', 'PostgreSQL', 'TypeScript', 'Next.js'],
-		rating: 4.9,
-		reviewsCount: 124,
-		isOnline: true,
-		avatar: 'SR',
-		about:
-			"Salom! Men Sardor, yosh va g'ayratli Full-Stack dasturchiman. 2 yildan beri web dasturlash sohasida yirik loyihalar ustida ishlab kelaman. Menga eng yoqadigan narsa - bu qiyin muammolarni oddiy va samarali yo'llar bilan hal etish.",
-		experience: '2 yil',
-		price: '150 000 UZS / soat',
-		availability: ['Dushanba', 'Chorshanba', 'Juma'],
-		languages: ["O'zbek tili", 'Rus tili', 'Ingliz tili (B1)'],
+const containerVariants = {
+	hidden: { opacity: 0 },
+	show: {
+		opacity: 1,
+		transition: { staggerChildren: 0.1 },
 	},
-	{
-		id: 2,
-		name: 'Malika B.',
-		course: '3-kurs',
-		specialty: 'Mobil Dasturlash',
-		skills: ['Kotlin', 'Android SDK', 'Java', 'Jetpack Compose'],
-		rating: 4.8,
-		reviewsCount: 89,
-		isOnline: false,
-		avatar: 'MB',
-		about:
-			"Men Malika, Android dasturchisi bo'lib, mobil ilovalar yaratish sirlarini siz bilan o'rtoqlashishga tayyorman. Kotlin tilining kuchini o'rganamiz va sizning birinchi ilovangizni Play Store'ga joylaymiz.",
-		experience: '3 yil',
-		price: '200 000 UZS / soat',
-		availability: ['Seshaba', 'Payshanba', 'Shanba'],
-		languages: ["O'zbek tili", 'Ingliz tili (C1)'],
-	},
-	{
-		id: 3,
-		name: 'Javohir T.',
-		course: '4-kurs',
-		specialty: "Algoritmlar va Ma'lumotlar",
-		skills: ['C++', 'Python', 'LeetCode', 'Data Structures'],
-		rating: 5.0,
-		reviewsCount: 210,
-		isOnline: true,
-		avatar: 'JT',
-		about:
-			"Algoritmlash va ma'lumotlar tuzilmalari bo'yicha kuchli bilimga ega bo'lmoqchimisiz? Men sizga texnik intervyulardan muvaffaqiyatli o'tish sirlarini o'rgataman. LeetCode musobaqalarida yuqori natijalar qayd etilgan.",
-		experience: '4 yil',
-		price: '300 000 UZS / soat',
-		availability: ['Dam olish kunlari'],
-		languages: ["O'zbek tili", 'Rus tili (Ona tili)'],
-	},
-	{
-		id: 4,
-		name: 'Aziza K.',
-		course: '2-kurs',
-		specialty: 'IT Menejment va Tahlil',
-		skills: ['BPM', 'UML', 'Agile', 'Scrum', 'Jira'],
-		rating: 4.7,
-		reviewsCount: 56,
-		isOnline: true,
-		avatar: 'AK',
-		about:
-			"Loyihalar qanday boshqarilishiga qiziqasizmi? Men IT loyihalarni biznes tahlil qilish va samarali boshqarish yo'llarini o'rgataman. Agile va Scrum metodologiyalari bilan yaqindan tanishamiz.",
-		experience: '1.5 yil',
-		price: '120 000 UZS / soat',
-		availability: ['Dushanba', 'Seshaba', 'Chorshanba'],
-		languages: ["O'zbek tili", 'Ingliz tili (IELTS 7.5)'],
-	},
-	{
-		id: 5,
-		name: 'Bekzod O.',
-		course: '3-kurs',
-		specialty: 'Backend Dasturlash',
-		skills: ['Go', 'Docker', 'Linux', 'Microservices', 'Kubernetes'],
-		rating: 4.6,
-		reviewsCount: 42,
-		isOnline: false,
-		avatar: 'BO',
-		about:
-			"Men asosan katta va murakkab tizimlar uchun xavfsiz backend arxitekturalarini yarataman. Agar siz ham serverlar, ma'lumotlar bazalari va API lar qanday ishlashiga qiziqsangiz, to'g'ri odamni topdingiz.",
-		experience: '3 yil',
-		price: '250 000 UZS / soat',
-		availability: ['Payshanba', 'Juma'],
-		languages: ["O'zbek tili", 'Rus tili'],
-	},
-	{
-		id: 6,
-		name: 'Diyora S.',
-		course: '1-kurs (Magistr)',
-		specialty: 'UI/UX Dizayn',
-		skills: ['Figma', 'Design Systems', 'UX Research', 'Prototyping'],
-		rating: 4.9,
-		reviewsCount: 178,
-		isOnline: true,
-		avatar: 'DS',
-		about:
-			"Foydalanuvchilar sevuvchi mahsulotlar yaratish men uchun ehtiros. Figma'ni mukammal o'rganamiz, ux tadqiqotlar o'tkazamiz va dizayn tizimlarini qurishni amaliyotda ko'ramiz.",
-		experience: '4 yil',
-		price: '180 000 UZS / soat',
-		availability: ['Kelishilgan holda'],
-		languages: ["O'zbek tili", 'Ingliz tili (C1)'],
-	},
-]
+}
 
-// Darslar mock datasi
-const MOCK_COURSES = [
-	{
-		id: 1,
-		title: 'React.js Noldan Pro gacha',
-		lessons: 24,
-		duration: '32 soat',
-		level: "Boshlang'ich",
+const itemVariants = {
+	hidden: { opacity: 0, y: 20 },
+	show: {
+		opacity: 1,
+		y: 0,
+		transition: { type: 'spring', stiffness: 300, damping: 24 },
 	},
-	{
-		id: 2,
-		title: 'Next.js 14 va Server Actions',
-		lessons: 16,
-		duration: '18 soat',
-		level: "O'rta maxsus",
-	},
-	{
-		id: 3,
-		title: 'Zamonaviy Frontend Arxitekturasi',
-		lessons: 10,
-		duration: '12 soat',
-		level: 'Murakkab',
-	},
-]
+}
 
-export default async function MentorDetailsPage({ params }) {
-	const props = await params
-	const mentor = MENTORS.find(m => m.id === parseInt(props.id))
+export default function MentorDetailsPage() {
+	const params = useParams()
+	const router = useRouter()
+	const [mentor, setMentor] = useState(null)
+	const [lessons, setLessons] = useState([])
+	const [loading, setLoading] = useState(true)
+
+	const [currentUser, setCurrentUser] = useState(null)
+	const [authChecked, setAuthChecked] = useState(false)
+
+	const [hoveredStar, setHoveredStar] = useState(0)
+	const [userRating, setUserRating] = useState(0)
+	const [avgRating, setAvgRating] = useState(0)
+	const [ratingsCount, setRatingsCount] = useState(0)
+	const [ratingLoading, setRatingLoading] = useState(false)
+
+	const [isFollowing, setIsFollowing] = useState(false)
+	const [followersCount, setFollowersCount] = useState(0)
+	const [followLoading, setFollowLoading] = useState(false)
+
+	const [showAuthModal, setShowAuthModal] = useState(false)
+	const [authModalAction, setAuthModalAction] = useState('')
+
+	const [showSuccessModal, setShowSuccessModal] = useState(false)
+	const [successMessage, setSuccessMessage] = useState('')
+
+	useEffect(() => {
+		const fetchMentor = async () => {
+			try {
+				const res = await api.get(`/public/mentors/${params.id}`)
+				if (res.data.success) {
+					setMentor(res.data.mentor)
+					setLessons(res.data.lessons || [])
+					setAvgRating(res.data.mentor.rating || 0)
+					setRatingsCount(res.data.mentor.ratingsCount || 0)
+					setFollowersCount(res.data.mentor.followersCount || 0)
+					setIsFollowing(res.data.mentor.isFollowing || false)
+					setUserRating(res.data.mentor.userRating || 0)
+				}
+			} catch (error) {
+				console.error(error)
+			} finally {
+				setLoading(false)
+			}
+		}
+
+		if (params.id) fetchMentor()
+	}, [params.id])
+
+	useEffect(() => {
+		const checkAuth = async () => {
+			try {
+				const { data } = await api.get('/auth/me')
+				if (data.success && data.user) {
+					setCurrentUser(data.user)
+				}
+			} catch {
+			} finally {
+				setAuthChecked(true)
+			}
+		}
+		checkAuth()
+	}, [])
+
+	const getInitials = m => {
+		const first = m?.firstName ? m.firstName[0] : ''
+		const last = m?.lastName ? m.lastName[0] : ''
+		return (first + last).toUpperCase()
+	}
+
+	const getLanguageDisplay = languages => {
+		if (!languages || languages.length === 0) return null
+		return languages.map(l => {
+			let text = l.lang || ''
+			if (l.level) text += ` (${l.level})`
+			if (l.isNative) text += ' — Ona tili'
+			return text
+		})
+	}
+
+	const getScheduleDisplay = schedule => {
+		if (!schedule || schedule.length === 0) return []
+		return schedule.map(s => `${s.day}: ${s.from} - ${s.to}`)
+	}
+
+	const requireAuth = actionName => {
+		if (!currentUser) {
+			setAuthModalAction(actionName)
+			setShowAuthModal(true)
+			return false
+		}
+		return true
+	}
+
+	const handleRate = async score => {
+		if (!requireAuth('baho berish')) return
+
+		setRatingLoading(true)
+		try {
+			const res = await api.post(`/public/mentors/${params.id}/rate`, { score })
+			if (res.data.success) {
+				setUserRating(res.data.userRating)
+				setAvgRating(res.data.rating)
+				setRatingsCount(res.data.ratingsCount)
+				setSuccessMessage(`Siz mentorga ${score} ⭐ baho berdingiz. Rahmat!`)
+				setShowSuccessModal(true)
+			}
+		} catch (error) {
+			if (error.response?.status === 401) {
+				setAuthModalAction('baho berish')
+				setShowAuthModal(true)
+			}
+		} finally {
+			setRatingLoading(false)
+		}
+	}
+
+	const handleFollow = async () => {
+		if (!requireAuth("obuna bo'lish")) return
+
+		setFollowLoading(true)
+		try {
+			if (isFollowing) {
+				const res = await api.delete(`/public/mentors/${params.id}/follow`)
+				if (res.data.success) {
+					setIsFollowing(false)
+					setFollowersCount(res.data.followersCount)
+				}
+			} else {
+				const res = await api.post(`/public/mentors/${params.id}/follow`)
+				if (res.data.success) {
+					setIsFollowing(true)
+					setFollowersCount(res.data.followersCount)
+					setSuccessMessage(
+						`Siz ${mentor.firstName} ${mentor.lastName} ga muvaffaqiyatli obuna bo'ldingiz!`,
+					)
+					setShowSuccessModal(true)
+				}
+			}
+		} catch (error) {
+			if (error.response?.status === 401) {
+				setAuthModalAction("obuna bo'lish")
+				setShowAuthModal(true)
+			}
+		} finally {
+			setFollowLoading(false)
+		}
+	}
+
+	const handleMessage = () => {
+		if (!requireAuth('xabar yuborish')) return
+
+		sessionStorage.setItem(
+			'selectedContact',
+			JSON.stringify({
+				id: `contact_${mentor._id}`,
+				contactTargetId: mentor._id,
+				name: `${mentor.firstName} ${mentor.lastName}`,
+				role: 'mentor',
+			}),
+		)
+		router.push('/users/messages')
+	}
+
+	if (loading) {
+		return (
+			<div className='bg-muted/30 min-h-screen pb-16'>
+				<Navbar />
+				<div className='container mx-auto px-4 py-6 max-w-6xl'>
+					<div className='inline-block mb-4'>
+						<Skeleton className='h-10 w-40' />
+					</div>
+					<div className='grid grid-cols-1 lg:grid-cols-3 gap-8'>
+						<div className='lg:col-span-2 space-y-6'>
+							<Card className='overflow-hidden border-none shadow-sm'>
+								<Skeleton className='h-32 sm:h-40 w-full rounded-none' />
+								<div className='px-6 sm:px-8 pb-8 relative'>
+									<div className='flex flex-col sm:flex-row gap-5 sm:items-end -mt-16 sm:-mt-20 mb-6'>
+										<Skeleton className='h-32 w-32 rounded-full border-4 border-background shrink-0' />
+										<div className='flex-1 pb-1 sm:pb-3 space-y-3 w-full'>
+											<div className='flex flex-col sm:flex-row justify-between gap-4'>
+												<div className='space-y-2 w-full'>
+													<Skeleton className='h-8 w-3/4 sm:w-1/2' />
+													<Skeleton className='h-5 w-1/2 sm:w-1/3' />
+												</div>
+												<Skeleton className='h-8 w-24 rounded-full' />
+											</div>
+										</div>
+									</div>
+									<div className='flex flex-wrap gap-4 mb-8 p-4 bg-muted/40 rounded-xl'>
+										<Skeleton className='h-6 w-24' />
+										<Skeleton className='h-6 w-32' />
+										<Skeleton className='h-6 w-28' />
+										<Skeleton className='h-6 w-32' />
+									</div>
+									<div className='space-y-3 mb-6'>
+										<Skeleton className='h-6 w-32' />
+										<div className='space-y-2'>
+											<Skeleton className='h-4 w-full' />
+											<Skeleton className='h-4 w-[90%]' />
+											<Skeleton className='h-4 w-[80%]' />
+										</div>
+									</div>
+								</div>
+							</Card>
+							<Card className='border-none shadow-sm'>
+								<CardHeader className='pb-3'>
+									<Skeleton className='h-6 w-40' />
+								</CardHeader>
+								<CardContent>
+									<div className='flex flex-wrap gap-2.5'>
+										<Skeleton className='h-8 w-20 rounded-full' />
+										<Skeleton className='h-8 w-24 rounded-full' />
+										<Skeleton className='h-8 w-16 rounded-full' />
+										<Skeleton className='h-8 w-28 rounded-full' />
+									</div>
+								</CardContent>
+							</Card>
+						</div>
+						<div className='space-y-6'>
+							<Card className='sticky top-24 border-none shadow-sm'>
+								<CardContent className='p-6'>
+									<div className='space-y-3 mb-6'>
+										<Skeleton className='h-12 w-full rounded-md' />
+										<Skeleton className='h-11 w-full rounded-md' />
+										<Skeleton className='h-11 w-full rounded-md' />
+									</div>
+									<Separator className='my-6' />
+									<div className='space-y-4 mb-6'>
+										<Skeleton className='h-5 w-32' />
+										<Skeleton className='h-8 w-full rounded-md' />
+										<Skeleton className='h-8 w-full rounded-md' />
+									</div>
+									<Separator className='my-6' />
+									<Skeleton className='h-36 w-full rounded-xl' />
+								</CardContent>
+							</Card>
+						</div>
+					</div>
+				</div>
+			</div>
+		)
+	}
 
 	if (!mentor) {
 		return (
@@ -173,213 +321,391 @@ export default async function MentorDetailsPage({ params }) {
 		)
 	}
 
+	const scheduleItems = getScheduleDisplay(mentor.schedule)
+	const languageItems = getLanguageDisplay(mentor.languages)
+
 	return (
 		<div className='bg-muted/30 min-h-screen pb-16'>
 			<Navbar />
 
-			{/* HEADER / ORQAGA QAYTISH */}
-			<div className='container mx-auto px-4 py-6 max-w-6xl'>
-				<Link href='/home/mentors' className='inline-block mb-4'>
-					<Button
-						variant='ghost'
-						className='px-0 hover:bg-transparent text-muted-foreground hover:text-foreground gap-2'
-					>
-						<ArrowLeft className='h-4 w-4' /> Mentorlar ro'yxati
-					</Button>
-				</Link>
+			<Dialog open={showAuthModal} onOpenChange={setShowAuthModal}>
+				<DialogContent className='sm:max-w-md'>
+					<DialogHeader className='text-center space-y-4'>
+						<div className='mx-auto bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center'>
+							<LogIn className='h-8 w-8 text-primary' />
+						</div>
+						<DialogTitle className='text-xl font-bold'>
+							Tizimga kiring
+						</DialogTitle>
+						<DialogDescription className='text-base leading-relaxed'>
+							<strong className='text-foreground capitalize'>
+								{authModalAction}
+							</strong>{' '}
+							uchun avval tizimga kirishingiz kerak.
+						</DialogDescription>
+					</DialogHeader>
+					<DialogFooter className='flex flex-col sm:flex-row gap-3 pt-4'>
+						<Button
+							variant='outline'
+							className='flex-1 h-11 rounded-xl'
+							onClick={() => setShowAuthModal(false)}
+						>
+							Keyinroq
+						</Button>
+						<Button
+							className='flex-1 h-11 rounded-xl font-semibold gap-2'
+							onClick={() => {
+								setShowAuthModal(false)
+								router.push('/authentication')
+							}}
+						>
+							<LogIn className='h-4 w-4' />
+							Tizimga kirish
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			<Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
+				<DialogContent className='sm:max-w-md'>
+					<DialogHeader className='text-center space-y-4'>
+						<div className='mx-auto bg-green-500/10 w-16 h-16 rounded-full flex items-center justify-center'>
+							<CheckCircle className='h-8 w-8 text-green-500' />
+						</div>
+						<DialogTitle className='text-xl font-bold'>
+							Muvaffaqiyatli!
+						</DialogTitle>
+						<DialogDescription className='text-base leading-relaxed'>
+							{successMessage}
+						</DialogDescription>
+					</DialogHeader>
+					<DialogFooter className='pt-4'>
+						<Button
+							className='w-full h-11 rounded-xl font-semibold'
+							onClick={() => setShowSuccessModal(false)}
+						>
+							Tushunarli
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			<motion.div
+				variants={containerVariants}
+				initial='hidden'
+				animate='show'
+				className='container mx-auto px-4 py-6 max-w-6xl'
+			>
+				<motion.div variants={itemVariants} className='inline-block mb-4'>
+					<Link href='/home/mentors'>
+						<Button
+							variant='ghost'
+							className='px-0 hover:bg-transparent text-muted-foreground hover:text-foreground gap-2'
+						>
+							<ArrowLeft className='h-4 w-4' /> Mentorlar ro'yxati
+						</Button>
+					</Link>
+				</motion.div>
 
 				<div className='grid grid-cols-1 lg:grid-cols-3 gap-8'>
-					{/* ASOSIY QISM (CHAP TOMON - 2 USTUN) */}
 					<div className='lg:col-span-2 space-y-6'>
-						{/* 1. MENTOR PROFIL KARTASI */}
-						<Card className='overflow-hidden border-none shadow-sm'>
-							{/* Banner qismi */}
-							<div className='h-32 sm:h-40 bg-gradient-to-r from-primary/20 via-primary/10 to-muted relative'></div>
+						<motion.div variants={itemVariants}>
+							<Card className='overflow-hidden border-none shadow-sm'>
+								<div className='h-32 sm:h-40 bg-gradient-to-r from-primary/20 via-primary/10 to-muted relative'></div>
 
-							<div className='px-6 sm:px-8 pb-8 relative'>
-								{/* Avatar va Ism/Reyting bloki */}
-								<div className='flex flex-col sm:flex-row gap-5 sm:items-end -mt-16 sm:-mt-20 mb-6'>
-									<div className='relative inline-block'>
-										<Avatar className='h-32 w-32 border-4 border-background shadow-md'>
-											<AvatarImage src='' alt={mentor.name} />
-											<AvatarFallback className='bg-primary/10 text-primary text-4xl font-bold'>
-												{mentor.avatar}
-											</AvatarFallback>
-										</Avatar>
-										{mentor.isOnline && (
-											<div className='absolute bottom-2 right-2 flex h-5 w-5 rounded-full border-4 border-background bg-green-500'></div>
+								<div className='px-6 sm:px-8 pb-8 relative'>
+									<div className='flex flex-col sm:flex-row gap-5 sm:items-end -mt-16 sm:-mt-20 mb-6'>
+										<div className='relative inline-block'>
+											<Avatar className='h-32 w-32 border-4 border-background shadow-md'>
+												<AvatarImage
+													src={mentor.avatarUrl || ''}
+													alt={`${mentor.firstName} ${mentor.lastName}`}
+												/>
+												<AvatarFallback className='bg-primary/10 text-primary text-4xl font-bold'>
+													{getInitials(mentor)}
+												</AvatarFallback>
+											</Avatar>
+										</div>
+
+										<div className='flex-1 pb-1 sm:pb-3'>
+											<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
+												<div>
+													<h1 className='text-2xl sm:text-3xl font-extrabold text-foreground'>
+														{mentor.firstName} {mentor.lastName}
+													</h1>
+													<p className='text-primary font-medium flex items-center gap-1.5 mt-1.5 text-sm sm:text-base'>
+														<BookOpen className='h-4.5 w-4.5' />
+														{mentor.specialty || 'Mentor'}
+													</p>
+												</div>
+												<Badge
+													variant='secondary'
+													className='px-3 py-1.5 rounded-full flex items-center gap-1.5 w-fit'
+												>
+													<Star className='h-4 w-4 text-yellow-500 fill-yellow-500' />
+													<span className='font-bold text-sm'>
+														{avgRating > 0 ? avgRating : '—'}
+													</span>
+													<span className='text-muted-foreground font-normal'>
+														({ratingsCount})
+													</span>
+												</Badge>
+											</div>
+										</div>
+									</div>
+
+									<div className='flex flex-wrap gap-4 text-sm text-muted-foreground mb-8 p-4 bg-muted/40 rounded-xl'>
+										{mentor.course && (
+											<div className='flex items-center gap-2'>
+												<GraduationCap className='h-4 w-4 text-primary' />
+												<span className='font-medium'>{mentor.course}</span>
+											</div>
+										)}
+										{mentor.experience && (
+											<div className='flex items-center gap-2'>
+												<Briefcase className='h-4 w-4 text-primary' />
+												<span className='font-medium'>
+													{mentor.experience} tajriba
+												</span>
+											</div>
+										)}
+										<div className='flex items-center gap-2'>
+											<Users className='h-4 w-4 text-primary' />
+											<span className='font-medium'>
+												{mentor.studentsCount || 0} ta o'quvchi
+											</span>
+										</div>
+										<div className='flex items-center gap-2'>
+											<Heart className='h-4 w-4 text-primary' />
+											<span className='font-medium'>
+												{followersCount} ta obunachi
+											</span>
+										</div>
+										{mentor.username && (
+											<a
+												href={`https://t.me/${mentor.username}`}
+												target='_blank'
+												rel='noopener noreferrer'
+												className='flex items-center gap-2 text-blue-500 hover:text-blue-600 transition-colors'
+											>
+												<Send className='h-4 w-4' />
+												<span className='font-medium'>@{mentor.username}</span>
+												<ExternalLink className='h-3 w-3' />
+											</a>
 										)}
 									</div>
 
-									<div className='flex-1 pb-1 sm:pb-3'>
-										<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
-											<div>
-												<h1 className='text-2xl sm:text-3xl font-extrabold text-foreground'>
-													{mentor.name}
-												</h1>
-												<p className='text-primary font-medium flex items-center gap-1.5 mt-1.5 text-sm sm:text-base'>
-													<BookOpen className='h-4.5 w-4.5' />
-													{mentor.specialty}
-												</p>
+									{languageItems && languageItems.length > 0 && (
+										<div className='flex flex-wrap gap-4 text-sm text-muted-foreground mb-6 p-4 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl border border-blue-100/50 dark:border-blue-900/30'>
+											<div className='flex items-center gap-2 w-full mb-1'>
+												<Globe className='h-4 w-4 text-blue-500' />
+												<span className='font-semibold text-foreground text-xs uppercase tracking-wider'>
+													Tillar
+												</span>
 											</div>
-											<Badge
-												variant='secondary'
-												className='px-3 py-1.5 rounded-full flex items-center gap-1.5 w-fit'
-											>
-												<Star className='h-4 w-4 text-yellow-500 fill-yellow-500' />
-												<span className='font-bold text-sm'>
-													{mentor.rating}
-												</span>
-												<span className='text-muted-foreground font-normal'>
-													({mentor.reviewsCount})
-												</span>
-											</Badge>
+											{languageItems.map((lang, idx) => (
+												<Badge
+													key={idx}
+													variant='outline'
+													className='bg-background font-normal'
+												>
+													{lang}
+												</Badge>
+											))}
 										</div>
-									</div>
-								</div>
+									)}
 
-								{/* Qisqacha teglar */}
-								<div className='flex flex-wrap gap-4 text-sm text-muted-foreground mb-8 p-4 bg-muted/40 rounded-xl'>
-									<div className='flex items-center gap-2'>
-										<GraduationCap className='h-4 w-4 text-primary' />
-										<span className='font-medium'>{mentor.course} bosqich</span>
-									</div>
-									<div className='flex items-center gap-2'>
-										<Briefcase className='h-4 w-4 text-primary' />
-										<span className='font-medium'>
-											{mentor.experience} tajriba
-										</span>
-									</div>
-									<div className='flex items-center gap-2'>
-										<Globe className='h-4 w-4 text-primary' />
-										<span className='font-medium'>
-											{mentor.languages.join(', ')}
-										</span>
-									</div>
+									{mentor.about && (
+										<div className='space-y-3'>
+											<h3 className='text-lg font-bold text-foreground'>
+												Men haqimda
+											</h3>
+											<p className='text-muted-foreground leading-relaxed text-[15px]'>
+												{mentor.about}
+											</p>
+										</div>
+									)}
 								</div>
+							</Card>
+						</motion.div>
 
-								{/* Men haqimda */}
-								<div className='space-y-3'>
-									<h3 className='text-lg font-bold text-foreground'>
-										Men haqimda
-									</h3>
-									<p className='text-muted-foreground leading-relaxed text-[15px]'>
-										{mentor.about}
-									</p>
-								</div>
-							</div>
-						</Card>
+						{mentor.skills && mentor.skills.length > 0 && (
+							<motion.div variants={itemVariants}>
+								<Card className='border-none shadow-sm'>
+									<CardHeader className='pb-3'>
+										<CardTitle className='text-lg'>
+											Texnik Ko'nikmalar
+										</CardTitle>
+									</CardHeader>
+									<CardContent>
+										<div className='flex flex-wrap gap-2.5'>
+											{mentor.skills.map((skill, idx) => (
+												<Badge
+													key={idx}
+													variant='outline'
+													className='px-3 py-1.5 text-sm bg-background'
+												>
+													{skill}
+												</Badge>
+											))}
+										</div>
+									</CardContent>
+								</Card>
+							</motion.div>
+						)}
 
-						{/* 2. KO'NIKMALAR */}
-						<Card className='border-none shadow-sm'>
-							<CardHeader className='pb-3'>
-								<CardTitle className='text-lg'>Texnik Ko'nikmalar</CardTitle>
-							</CardHeader>
-							<CardContent>
-								<div className='flex flex-wrap gap-2.5'>
-									{mentor.skills.map((skill, idx) => (
-										<Badge
-											key={idx}
-											variant='outline'
-											className='px-3 py-1.5 text-sm bg-background'
+						{lessons.length > 0 && (
+							<motion.div variants={itemVariants} className='pt-4'>
+								<h3 className='text-xl font-bold flex items-center gap-2 mb-4 px-1'>
+									<PlayCircle className='h-6 w-6 text-primary' />
+									Mentorning Darslari
+								</h3>
+								<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+									{lessons.map(lesson => (
+										<Card
+											key={lesson._id}
+											className='hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group border-muted'
 										>
-											{skill}
-										</Badge>
+											<CardContent className='p-5 flex flex-col h-full'>
+												<h4 className='font-semibold text-lg mb-3 group-hover:text-primary transition-colors line-clamp-2'>
+													{lesson.title}
+												</h4>
+												{lesson.description && (
+													<p className='text-sm text-muted-foreground mb-3 line-clamp-2'>
+														{lesson.description}
+													</p>
+												)}
+												<div className='flex items-center gap-3 text-sm text-muted-foreground mt-auto pt-4 border-t'>
+													{lesson.date && (
+														<div className='flex items-center gap-1.5'>
+															<Calendar className='h-4 w-4' />
+															<span>
+																{new Date(lesson.date).toLocaleDateString(
+																	'uz-UZ',
+																)}
+															</span>
+														</div>
+													)}
+													{lesson.time && (
+														<>
+															<div className='bg-border w-1 h-1 rounded-full'></div>
+															<div className='flex items-center gap-1.5'>
+																<Clock className='h-4 w-4' />
+																<span>{lesson.time}</span>
+															</div>
+														</>
+													)}
+												</div>
+												<div className='flex items-center gap-2 mt-3'>
+													<Badge
+														variant='secondary'
+														className='w-fit text-xs font-medium'
+													>
+														{lesson.format || 'online'}
+													</Badge>
+													<Badge
+														variant={
+															lesson.status === 'completed'
+																? 'default'
+																: 'outline'
+														}
+														className='w-fit text-xs font-medium'
+													>
+														{lesson.status === 'upcoming'
+															? 'Kutilmoqda'
+															: lesson.status === 'live'
+																? 'Jonli'
+																: 'Tugallangan'}
+													</Badge>
+												</div>
+											</CardContent>
+										</Card>
 									))}
 								</div>
-							</CardContent>
-						</Card>
-
-						{/* 3. DARSLAR RO'YXATI */}
-						<div className='pt-4'>
-							<h3 className='text-xl font-bold flex items-center gap-2 mb-4 px-1'>
-								<PlayCircle className='h-6 w-6 text-primary' />
-								Mentorning Darslari
-							</h3>
-							<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-								{MOCK_COURSES.map(course => (
-									<Card
-										key={course.id}
-										className='hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group border-muted'
-									>
-										<CardContent className='p-5 flex flex-col h-full'>
-											<h4 className='font-semibold text-lg mb-3 group-hover:text-primary transition-colors line-clamp-2'>
-												{course.title}
-											</h4>
-											<div className='flex items-center gap-3 text-sm text-muted-foreground mt-auto pt-4 border-t'>
-												<div className='flex items-center gap-1.5'>
-													<BookOpen className='h-4 w-4' />
-													<span>{course.lessons} dars</span>
-												</div>
-												<div className='bg-border w-1 h-1 rounded-full'></div>
-												<div className='flex items-center gap-1.5'>
-													<Clock className='h-4 w-4' />
-													<span>{course.duration}</span>
-												</div>
-											</div>
-											<Badge
-												variant='secondary'
-												className='mt-4 w-fit text-xs font-medium'
-											>
-												{course.level}
-											</Badge>
-										</CardContent>
-									</Card>
-								))}
-							</div>
-						</div>
+							</motion.div>
+						)}
 					</div>
 
-					{/* YON QISM (O'NG TOMON - SIDEBAR) */}
-					<div className='space-y-6'>
+					<motion.div variants={itemVariants} className='space-y-6'>
 						<Card className='sticky top-24 border-none shadow-sm'>
 							<CardContent className='p-6'>
-								{/* Narx qismi (Oldin yo'q edi) */}
-
 								<div className='space-y-3 mb-6'>
-									<Button className='w-full h-11 text-base font-semibold shadow-sm'>
-										<UserPlus className='mr-2 h-5 w-5' /> Darsga yozilish
+									<Button
+										className={`w-full h-12 text-base font-semibold shadow-sm transition-all ${
+											isFollowing
+												? 'bg-secondary text-secondary-foreground hover:bg-destructive hover:text-destructive-foreground'
+												: ''
+										}`}
+										onClick={handleFollow}
+										disabled={followLoading}
+									>
+										{followLoading ? (
+											<Loader2 className='mr-2 h-5 w-5 animate-spin' />
+										) : isFollowing ? (
+											<>
+												<CheckCircle2 className='mr-2 h-5 w-5' />
+												Obuna bo'lindi
+											</>
+										) : (
+											<>
+												<UserPlus className='mr-2 h-5 w-5' />
+												Obuna bo'lish
+											</>
+										)}
 									</Button>
 
-									<Link
-										href={`/home/mentors/${mentor.id}/messages`}
-										className='block w-full'
+									<Button
+										variant='outline'
+										className='w-full h-11 text-base font-medium'
+										onClick={handleMessage}
 									>
-										<Button
-											variant='outline'
-											className='w-full h-11 text-base font-medium'
+										<MessageSquare className='mr-2 h-4 w-4' /> Xabar yozish
+									</Button>
+
+									{mentor.username && (
+										<a
+											href={`https://t.me/${mentor.username}`}
+											target='_blank'
+											rel='noopener noreferrer'
+											className='block w-full'
 										>
-											<MessageSquare className='mr-2 h-4 w-4' /> Xabar yozish
-										</Button>
-									</Link>
-								</div>
-
-								<Separator className='my-6' />
-
-								{/* BO'SH VAQTLARI */}
-								<div className='space-y-4 mb-6'>
-									<h4 className='font-semibold text-sm text-foreground uppercase tracking-wider flex items-center gap-2'>
-										<Clock className='h-4 w-4 text-primary' />
-										Bo'sh vaqtlari
-									</h4>
-									<div className='space-y-2.5'>
-										{mentor.availability.map((day, idx) => (
-											<div
-												key={idx}
-												className='flex items-center gap-3 text-sm bg-muted/50 p-2 rounded-md'
+											<Button
+												variant='outline'
+												className='w-full h-11 text-base font-medium text-blue-500 border-blue-200 hover:bg-blue-50 hover:text-blue-600 dark:border-blue-800 dark:hover:bg-blue-950'
 											>
-												<CheckCircle className='h-4 w-4 text-green-500' />
-												<span className='font-medium text-muted-foreground'>
-													{day}
-												</span>
-											</div>
-										))}
-									</div>
+												<Send className='mr-2 h-4 w-4' /> Telegramda yozish
+											</Button>
+										</a>
+									)}
 								</div>
 
 								<Separator className='my-6' />
 
-								{/* REYTING */}
+								{scheduleItems.length > 0 && (
+									<>
+										<div className='space-y-4 mb-6'>
+											<h4 className='font-semibold text-sm text-foreground uppercase tracking-wider flex items-center gap-2'>
+												<Clock className='h-4 w-4 text-primary' />
+												Bo'sh vaqtlari
+											</h4>
+											<div className='space-y-2.5'>
+												{scheduleItems.map((item, idx) => (
+													<div
+														key={idx}
+														className='flex items-center gap-3 text-sm bg-muted/50 p-2 rounded-md'
+													>
+														<CheckCircle className='h-4 w-4 text-green-500' />
+														<span className='font-medium text-muted-foreground'>
+															{item}
+														</span>
+													</div>
+												))}
+											</div>
+										</div>
+										<Separator className='my-6' />
+									</>
+								)}
+
 								<div className='p-5 bg-background rounded-xl border shadow-sm text-center space-y-3'>
 									<h4 className='font-semibold text-sm text-foreground'>
 										Mentorni Baholash
@@ -388,21 +714,42 @@ export default async function MentorDetailsPage({ params }) {
 										{[1, 2, 3, 4, 5].map(star => (
 											<button
 												key={star}
-												className='p-1 hover:scale-110 transition-transform focus:outline-none'
+												disabled={ratingLoading}
+												className='p-1 hover:scale-125 transition-all focus:outline-none disabled:opacity-50'
+												onMouseEnter={() => setHoveredStar(star)}
+												onMouseLeave={() => setHoveredStar(0)}
+												onClick={() => handleRate(star)}
 											>
-												<Star className='h-7 w-7 text-muted hover:text-yellow-400 hover:fill-yellow-400 transition-colors' />
+												<Star
+													className={`h-7 w-7 transition-colors ${
+														star <= (hoveredStar || userRating)
+															? 'text-yellow-400 fill-yellow-400'
+															: 'text-muted hover:text-yellow-300'
+													}`}
+												/>
 											</button>
 										))}
 									</div>
-									<p className='text-xs text-muted-foreground font-medium'>
-										Dars o'tgach baho qoldiring
-									</p>
+									{userRating > 0 ? (
+										<p className='text-xs text-green-600 font-medium'>
+											Siz {userRating} ⭐ baho berdingiz
+										</p>
+									) : (
+										<p className='text-xs text-muted-foreground font-medium'>
+											Baho berish uchun yulduzlarni bosing
+										</p>
+									)}
+									{avgRating > 0 && (
+										<p className='text-xs text-muted-foreground'>
+											O'rtacha reyting: {avgRating} ({ratingsCount} ta baho)
+										</p>
+									)}
 								</div>
 							</CardContent>
 						</Card>
-					</div>
+					</motion.div>
 				</div>
-			</div>
+			</motion.div>
 		</div>
 	)
 }

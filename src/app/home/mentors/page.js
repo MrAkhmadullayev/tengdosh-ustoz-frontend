@@ -3,7 +3,6 @@
 import Navbar from '@/components/landing/Navbar'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
 	Card,
 	CardContent,
@@ -20,93 +19,67 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select'
-import { BookOpen, Clock, Search, Star, UserCheck } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import api from '@/lib/api'
+import { motion } from 'framer-motion'
+import { BookOpen, Search, Star, UserCheck, Users } from 'lucide-react'
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
-// Vaqtinchalik ma'lumotlar (Mock Data)
-const MENTORS = [
-	{
-		id: 1,
-		name: 'Sardor R.',
-		course: '2-kurs',
-		specialty: 'Full-Stack Dasturlash',
-		skills: ['React', 'Node.js', 'PostgreSQL'],
-		rating: 4.9,
-		reviewsCount: 124,
-		isOnline: true,
-		avatar: 'SR',
+const containerVariants = {
+	hidden: { opacity: 0 },
+	show: {
+		opacity: 1,
+		transition: { staggerChildren: 0.1 },
 	},
-	{
-		id: 2,
-		name: 'Malika B.',
-		course: '3-kurs',
-		specialty: 'Mobil Dasturlash',
-		skills: ['Kotlin', 'Android SDK', 'Java'],
-		rating: 4.8,
-		reviewsCount: 89,
-		isOnline: false,
-		avatar: 'MB',
-	},
-	{
-		id: 3,
-		name: 'Javohir T.',
-		course: '4-kurs',
-		specialty: "Algoritmlar va Ma'lumotlar",
-		skills: ['C++', 'Python', 'LeetCode'],
-		rating: 5.0,
-		reviewsCount: 210,
-		isOnline: true,
-		avatar: 'JT',
-	},
-	{
-		id: 4,
-		name: 'Aziza K.',
-		course: '2-kurs',
-		specialty: 'IT Menejment va Tahlil',
-		skills: ['BPM', 'UML', 'Agile'],
-		rating: 4.7,
-		reviewsCount: 56,
-		isOnline: true,
-		avatar: 'AK',
-	},
-	{
-		id: 5,
-		name: 'Bekzod O.',
-		course: '3-kurs',
-		specialty: 'Backend Dasturlash',
-		skills: ['Go', 'Docker', 'Linux'],
-		rating: 4.6,
-		reviewsCount: 42,
-		isOnline: false,
-		avatar: 'BO',
-	},
-	{
-		id: 6,
-		name: 'Diyora S.',
-		course: '1-kurs (Magistr)',
-		specialty: 'UI/UX Dizayn',
-		skills: ['Figma', 'Design Systems'],
-		rating: 4.9,
-		reviewsCount: 178,
-		isOnline: true,
-		avatar: 'DS',
-	},
-]
+}
 
-const specialties = Array.from(new Set(MENTORS.map(mentor => mentor.specialty)))
+const itemVariants = {
+	hidden: { opacity: 0, y: 20 },
+	show: {
+		opacity: 1,
+		y: 0,
+		transition: { type: 'spring', stiffness: 300, damping: 24 },
+	},
+}
 
 export default function MentorsPage() {
+	const [mentors, setMentors] = useState([])
+	const [loading, setLoading] = useState(true)
 	const [searchQuery, setSearchQuery] = useState('')
 	const [categoryFilter, setCategoryFilter] = useState('all')
 
+	useEffect(() => {
+		const fetchMentors = async () => {
+			try {
+				const res = await api.get('/public/mentors')
+				if (res?.data?.success) {
+					setMentors(res.data.mentors)
+				}
+			} catch (error) {
+				console.error(error)
+			} finally {
+				setLoading(false)
+			}
+		}
+		fetchMentors()
+	}, [])
+
+	const specialties = useMemo(() => {
+		return Array.from(new Set(mentors.map(m => m.specialty).filter(Boolean)))
+	}, [mentors])
+
 	const filteredMentors = useMemo(() => {
-		return MENTORS.filter(mentor => {
+		return mentors.filter(mentor => {
 			const searchLower = searchQuery.toLowerCase()
+			const fullName =
+				`${mentor.firstName || ''} ${mentor.lastName || ''}`.toLowerCase()
 			const matchesSearch =
-				mentor.name.toLowerCase().includes(searchLower) ||
-				mentor.specialty.toLowerCase().includes(searchLower) ||
-				mentor.skills.some(skill => skill.toLowerCase().includes(searchLower))
+				fullName.includes(searchLower) ||
+				(mentor.specialty || '').toLowerCase().includes(searchLower) ||
+				(mentor.skills || []).some(skill =>
+					skill.toLowerCase().includes(searchLower),
+				)
 
 			let matchesCategory = true
 			if (categoryFilter !== 'all') {
@@ -115,14 +88,24 @@ export default function MentorsPage() {
 
 			return matchesSearch && matchesCategory
 		})
-	}, [searchQuery, categoryFilter])
+	}, [mentors, searchQuery, categoryFilter])
+
+	const getInitials = (firstName, lastName) => {
+		const first = firstName ? firstName[0] : ''
+		const last = lastName ? lastName[0] : ''
+		return (first + last).toUpperCase()
+	}
 
 	return (
-		<div className=''>
+		<div className='min-h-screen bg-background flex flex-col'>
 			<Navbar />
-			<div className='container mx-auto px-4 py-8 md:py-12 max-w-7xl'>
-				{/* HEADER VA QIDIRUV QISMI */}
-				<div className='flex flex-col space-y-6 md:space-y-0 md:flex-row md:items-center md:justify-between mb-10'>
+			<main className='flex-1 container mx-auto px-4 py-8 md:py-12 max-w-7xl'>
+				<motion.div
+					initial={{ opacity: 0, y: -20 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: 0.5 }}
+					className='flex flex-col space-y-6 md:space-y-0 md:flex-row md:items-center md:justify-between mb-10'
+				>
 					<div>
 						<h1 className='text-3xl md:text-4xl font-extrabold tracking-tight mb-2'>
 							Mentorlar
@@ -156,124 +139,175 @@ export default function MentorsPage() {
 							</SelectContent>
 						</Select>
 					</div>
-				</div>
+				</motion.div>
 
-				{/* MENTORLAR RO'YXATI (GRID) */}
-				{filteredMentors.length === 0 ? (
-					<div className='flex flex-col items-center justify-center p-12 mt-8 border-2 border-dashed border-muted rounded-xl bg-muted/10'>
+				{loading ? (
+					<motion.div
+						variants={containerVariants}
+						initial='hidden'
+						animate='show'
+						className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'
+					>
+						{Array.from({ length: 4 }).map((_, i) => (
+							<motion.div key={i} variants={itemVariants}>
+								<Card className='flex flex-col overflow-hidden h-[320px]'>
+									<CardHeader className='pb-4 relative'>
+										<div className='flex items-center gap-4'>
+											<Skeleton className='h-14 w-14 rounded-full shrink-0' />
+											<div className='space-y-2 w-full'>
+												<Skeleton className='h-5 w-3/4' />
+												<Skeleton className='h-4 w-1/2' />
+											</div>
+										</div>
+									</CardHeader>
+									<CardContent className='flex-1 pb-4 flex flex-col'>
+										<Skeleton className='h-5 w-2/3 mb-4' />
+										<div className='flex flex-wrap gap-1.5 mt-2 mb-4'>
+											<Skeleton className='h-5 w-16 rounded-full' />
+											<Skeleton className='h-5 w-20 rounded-full' />
+										</div>
+										<div className='flex items-center justify-between mt-auto pt-4 border-t'>
+											<Skeleton className='h-4 w-16' />
+											<Skeleton className='h-4 w-24' />
+										</div>
+									</CardContent>
+									<CardFooter className='pt-0'>
+										<Skeleton className='h-10 w-full rounded-md' />
+									</CardFooter>
+								</Card>
+							</motion.div>
+						))}
+					</motion.div>
+				) : filteredMentors.length === 0 ? (
+					<motion.div
+						initial={{ opacity: 0, scale: 0.95 }}
+						animate={{ opacity: 1, scale: 1 }}
+						className='flex flex-col items-center justify-center p-12 mt-8 border-2 border-dashed border-muted rounded-xl bg-muted/10'
+					>
 						<UserCheck className='h-12 w-12 text-muted-foreground mb-4 opacity-50' />
 						<h3 className='text-xl font-semibold mb-2'>Mentorlar topilmadi</h3>
-						<p className='text-muted-foreground text-center max-w-md'>
+						<p className='text-muted-foreground text-center max-w-md mb-6'>
 							{searchQuery && categoryFilter !== 'all'
 								? `"${searchQuery}" so'rovi hamda "${categoryFilter}" yo'nalishi bo'yicha hech qanday mentor topilmadi.`
 								: searchQuery
 									? `Siz qidirgan "${searchQuery}" bo'yicha mentorlar topilmadi.`
 									: categoryFilter !== 'all'
 										? `"${categoryFilter}" yo'nalishi bo'yicha hozircha mentorlar mavjud emas.`
-										: `Kechirasiz, mentorlar topilmadi.`}
+										: `Kechirasiz, hozircha mentorlar mavjud emas.`}
 						</p>
-						<Button
-							variant='outline'
-							className='mt-6'
+						<button
+							className='inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2'
 							onClick={() => {
 								setSearchQuery('')
 								setCategoryFilter('all')
 							}}
 						>
 							Filtrlarni tozalash
-						</Button>
-					</div>
+						</button>
+					</motion.div>
 				) : (
-					<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
-						{filteredMentors.map(mentor => (
-							<Card
-								key={mentor.id}
-								className='flex flex-col overflow-hidden hover:border-primary/50 transition-colors group'
-							>
-								<CardHeader className='pb-4 relative'>
-									{/* Onlayn status indikatori */}
-									{mentor.isOnline && (
-										<div className='absolute top-4 right-4 flex items-center gap-1.5 bg-green-500/10 text-green-600 dark:text-green-400 px-2 py-1 rounded-full text-xs font-medium border border-green-500/20'>
-											<span className='relative flex h-2 w-2'>
-												<span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75'></span>
-												<span className='relative inline-flex rounded-full h-2 w-2 bg-green-500'></span>
-											</span>
-											Onlayn
-										</div>
-									)}
+					<motion.div
+						variants={containerVariants}
+						initial='hidden'
+						animate='show'
+						className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'
+					>
+						{filteredMentors.map(mentor => {
+							const skills = mentor.skills || []
+							const visibleSkills = skills.slice(0, 2)
+							const remainingSkillsCount = skills.length - 2
 
-									<div className='flex items-center gap-4'>
-										<Avatar className='h-14 w-14 border-2 border-background shadow-sm'>
-											<AvatarImage src='' alt={mentor.name} />
-											<AvatarFallback className='bg-primary/10 text-primary font-bold'>
-												{mentor.avatar}
-											</AvatarFallback>
-										</Avatar>
-										<div>
-											<CardTitle className='text-lg'>{mentor.name}</CardTitle>
-											<CardDescription className='flex items-center gap-1 mt-1'>
-												<UserCheck className='h-3.5 w-3.5' />
-												{mentor.course}
-											</CardDescription>
-										</div>
-									</div>
-								</CardHeader>
+							return (
+								<motion.div
+									key={mentor._id}
+									variants={itemVariants}
+									className='h-full'
+								>
+									<Link
+										href={`/home/mentors/${mentor._id}`}
+										className='group block h-full'
+									>
+										<Card className='flex flex-col h-full overflow-hidden hover:border-primary/50 hover:shadow-md transition-all duration-300'>
+											<CardHeader className='pb-4 relative'>
+												<div className='flex items-center gap-4'>
+													<Avatar className='h-14 w-14 border-2 border-background shadow-sm'>
+														<AvatarImage
+															src={mentor.avatarUrl || ''}
+															alt={`${mentor.firstName} ${mentor.lastName}`}
+														/>
+														<AvatarFallback className='bg-primary/10 text-primary font-bold'>
+															{getInitials(mentor.firstName, mentor.lastName)}
+														</AvatarFallback>
+													</Avatar>
+													<div>
+														<CardTitle className='text-lg group-hover:text-primary transition-colors'>
+															{mentor.firstName} {mentor.lastName?.charAt(0)}.
+														</CardTitle>
+														<CardDescription className='flex items-center gap-1 mt-1'>
+															<UserCheck className='h-3.5 w-3.5' />
+															{mentor.course || 'Mentor'}
+														</CardDescription>
+													</div>
+												</div>
+											</CardHeader>
 
-								<CardContent className='flex-1 pb-4'>
-									<div className='mb-4'>
-										<p className='font-medium text-foreground mb-2 flex items-center gap-1.5'>
-											<BookOpen className='h-4 w-4 text-primary' />
-											{mentor.specialty}
-										</p>
-										<div className='flex flex-wrap gap-1.5 mt-2'>
-											{mentor.skills.map((skill, idx) => (
-												<Badge
-													key={idx}
-													variant='secondary'
-													className='font-normal text-xs'
-												>
-													{skill}
-												</Badge>
-											))}
-										</div>
-									</div>
+											<CardContent className='flex-1 pb-4 flex flex-col'>
+												<div className='mb-4'>
+													<p className='font-medium text-foreground mb-2 flex items-center gap-1.5'>
+														<BookOpen className='h-4 w-4 text-primary' />
+														{mentor.specialty || 'Mentor'}
+													</p>
+													<div className='flex flex-wrap gap-1.5 mt-2'>
+														{visibleSkills.map((skill, idx) => (
+															<Badge
+																key={idx}
+																variant='secondary'
+																className='font-normal text-xs bg-secondary/50'
+															>
+																{skill}
+															</Badge>
+														))}
+														{remainingSkillsCount > 0 && (
+															<Badge
+																variant='secondary'
+																className='font-medium text-xs bg-primary/10 text-primary'
+															>
+																+{remainingSkillsCount}
+															</Badge>
+														)}
+													</div>
+												</div>
 
-									<div className='flex items-center gap-4 text-sm mt-auto pt-4 border-t'>
-										<div className='flex items-center gap-1'>
-											<Star className='h-4 w-4 text-yellow-500 fill-yellow-500' />
-											<span className='font-bold'>{mentor.rating}</span>
-											<span className='text-muted-foreground'>
-												({mentor.reviewsCount})
-											</span>
-										</div>
-										<div className='flex items-center gap-1 text-muted-foreground'>
-											<Clock className='h-4 w-4' />
-											<span>Moslashuvchan</span>
-										</div>
-									</div>
-								</CardContent>
+												<div className='flex items-center justify-between gap-4 text-sm mt-auto pt-4 border-t'>
+													<div className='flex items-center gap-1'>
+														<Star className='h-4 w-4 text-yellow-500 fill-yellow-500' />
+														<span className='font-bold'>
+															{mentor.rating > 0 ? mentor.rating : '—'}
+														</span>
+														<span className='text-muted-foreground text-xs'>
+															({mentor.ratingsCount || 0})
+														</span>
+													</div>
+													<div className='flex items-center gap-1 text-muted-foreground'>
+														<Users className='h-4 w-4' />
+														<span>{mentor.studentsCount || 0} o'quvchi</span>
+													</div>
+												</div>
+											</CardContent>
 
-								<CardFooter className='pt-0'>
-									<Link href={`/home/mentors/${mentor.id}`} className='w-full'>
-										<Button className='w-full group-hover:bg-primary group-hover:text-primary-foreground transition-all'>
-											Batafsil ko'rish
-										</Button>
+											<CardFooter className='pt-0'>
+												<div className='w-full inline-flex h-10 items-center justify-center rounded-md bg-secondary text-secondary-foreground text-sm font-medium transition-colors group-hover:bg-primary group-hover:text-primary-foreground'>
+													Batafsil ko'rish
+												</div>
+											</CardFooter>
+										</Card>
 									</Link>
-								</CardFooter>
-							</Card>
-						))}
-					</div>
+								</motion.div>
+							)
+						})}
+					</motion.div>
 				)}
-
-				{/* KO'PROQ YUKLASH TUGMASI */}
-				{filteredMentors.length > 8 && (
-					<div className='mt-10 flex justify-center'>
-						<Button variant='outline' size='lg' className='px-8'>
-							Yana ko'rsatish
-						</Button>
-					</div>
-				)}
-			</div>
+			</main>
 		</div>
 	)
 }
