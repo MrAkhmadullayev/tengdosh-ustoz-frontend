@@ -2,10 +2,6 @@ import { jwtVerify } from 'jose'
 import { NextResponse } from 'next/server'
 
 const JWT_SECRET = process.env.JWT_SECRET
-if (!JWT_SECRET) {
-	throw new Error('JWT_SECRET environment variable is not set')
-}
-const secretKey = new TextEncoder().encode(JWT_SECRET)
 
 const ROUTES = {
 	auth: '/authentication',
@@ -33,6 +29,16 @@ export async function middleware(req) {
 		}
 		return NextResponse.next()
 	}
+
+	if (!JWT_SECRET) {
+		console.error('JWT_SECRET environment variable is not set')
+		const response = isDashboardRoute
+			? NextResponse.redirect(new URL(ROUTES.auth, req.url))
+			: NextResponse.next()
+		return response
+	}
+
+	const secretKey = new TextEncoder().encode(JWT_SECRET)
 
 	try {
 		const { payload } = await jwtVerify(token, secretKey)
