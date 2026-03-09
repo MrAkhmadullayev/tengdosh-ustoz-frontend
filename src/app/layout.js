@@ -37,7 +37,12 @@ export const metadata = {
 		'IT talim',
 	],
 	authors: [{ name: 'Sadriddin Akhmadullayev' }],
-	metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL),
+	metadataBase: new URL(
+		process.env.NEXT_PUBLIC_SITE_URL ||
+			(process.env.VERCEL_URL
+				? `https://${process.env.VERCEL_URL}`
+				: 'https://tengdosh-ustoz.vercel.app'),
+	),
 	openGraph: {
 		type: 'website',
 		locale: 'uz_UZ',
