@@ -15,22 +15,26 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import api from '@/lib/api'
+import { useTranslation } from '@/lib/i18n'
+// 🔥 Markazlashgan utilitalar chaqirildi
+import { formatPhone, getErrorMessage } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Loader2, Save, ShieldAlert } from 'lucide-react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { toast } from 'sonner' // 🔥 Toast ulandi
 
+// ==========================================
+// 🎨 ANIMATSIYA VARIANTLARI
+// ==========================================
 const containerVariants = {
 	hidden: { opacity: 0 },
-	show: {
-		opacity: 1,
-		transition: { staggerChildren: 0.1 },
-	},
+	show: { opacity: 1, transition: { staggerChildren: 0.1 } },
 }
 
 const itemVariants = {
-	hidden: { opacity: 0, y: 20 },
+	hidden: { opacity: 0, y: 15 },
 	show: {
 		opacity: 1,
 		y: 0,
@@ -38,21 +42,14 @@ const itemVariants = {
 	},
 }
 
-const formatPhoneStr = str => {
-	let val = (str || '').replace(/[^\d+]/g, '')
-	if (!val.startsWith('+998')) val = '+998'
-	const raw = val.slice(4).substring(0, 9)
-	let formatted = '+998'
-	if (raw.length > 0) formatted += ' ' + raw.substring(0, 2)
-	if (raw.length > 2) formatted += ' ' + raw.substring(2, 5)
-	if (raw.length > 5) formatted += ' ' + raw.substring(5, 9)
-	return formatted
-}
-
+// ==========================================
+// 🚀 ASOSIY KOMPONENT
+// ==========================================
 export default function StudentEditPage() {
-	const params = useParams()
+	const { id } = useParams()
 	const router = useRouter()
-	const { id } = params
+	const { t } = useTranslation()
+
 	const [loading, setLoading] = useState(true)
 	const [isSaving, setIsSaving] = useState(false)
 	const [error, setError] = useState(null)
@@ -67,50 +64,54 @@ export default function StudentEditPage() {
 		status: 'active',
 	})
 
-	useEffect(() => {
-		const fetchStudent = async () => {
-			try {
-				const res = await api.get(`/admin/students/${id}`)
-				if (res?.data?.success) {
-					const data = res.data.student
-					const [gPref, gSuff] = (data.group || '-').split('-')
+	// 1. Ma'lumotlarni yuklash
+	const fetchStudent = useCallback(async () => {
+		try {
+			const res = await api.get(`/admin/students/${id}`)
+			if (res?.data?.success) {
+				const data = res.data.student
+				const [gPref, gSuff] = (data.group || '-').split('-')
 
-					setFormData({
-						firstName: data.firstName || '',
-						lastName: data.lastName || '',
-						phoneNumber: formatPhoneStr(data.phoneNumber),
-						course: data.course || '1-kurs (Bakalavr)',
-						groupPrefix: gPref || '',
-						groupSuffix: gSuff || '',
-						status: data.status || 'active',
-					})
-				} else {
-					setError('Talaba topilmadi')
-				}
-			} catch (err) {
-				console.error(err)
-				setError("Server xatosi: Ma'lumot yuklanmadi")
-			} finally {
-				setLoading(false)
+				setFormData({
+					firstName: data.firstName || '',
+					lastName: data.lastName || '',
+					phoneNumber: formatPhone(data.phoneNumber), // utils orqali tozalash
+					course: data.course || '1-kurs (Bakalavr)',
+					groupPrefix: gPref || '',
+					groupSuffix: gSuff || '',
+					status: data.status || 'active',
+				})
+			} else {
+				setError(t('errors.notFound') || 'Talaba topilmadi')
 			}
+		} catch (err) {
+			setError(getErrorMessage(err, t('errors.serverError')))
+		} finally {
+			setLoading(false)
 		}
+	}, [id, t])
 
+	useEffect(() => {
 		if (id) fetchStudent()
-	}, [id])
+	}, [fetchStudent])
 
-	const handleChange = e => {
+	// 2. Form o'zgarishlari
+	const handleChange = useCallback(e => {
 		const { name, value } = e.target
 		setFormData(prev => ({ ...prev, [name]: value }))
-	}
+	}, [])
 
-	const handlePhoneChange = e => {
-		setFormData(p => ({ ...p, phoneNumber: formatPhoneStr(e.target.value) }))
-	}
+	const handlePhoneChange = useCallback(e => {
+		setFormData(p => ({ ...p, phoneNumber: formatPhone(e.target.value) }))
+	}, [])
 
+	// 3. Formni yuborish (Submit)
 	const handleSubmit = async e => {
 		e.preventDefault()
 		setIsSaving(true)
+
 		try {
+			// Guruh nomini moslashtirish (Masalan: 320-22)
 			const finalGroup =
 				formData.groupPrefix && formData.groupSuffix
 					? `${formData.groupPrefix}-${formData.groupSuffix}`
@@ -119,24 +120,29 @@ export default function StudentEditPage() {
 			const payload = {
 				...formData,
 				group: finalGroup,
-				phoneNumber: formData.phoneNumber.replace(/\s+/g, ''),
+				phoneNumber: formData.phoneNumber.replace(/\D/g, ''), // Backend uchun toza raqam yuborish
 			}
 
 			const res = await api.put(`/admin/students/${id}`, payload)
+
 			if (res?.data?.success) {
+				toast.success(
+					t('common.updateSuccess') || "Ma'lumotlar muvaffaqiyatli saqlandi",
+				)
 				router.push(`/admin/students/${id}/view`)
 				router.refresh()
 			}
 		} catch (err) {
-			console.error(err)
+			toast.error(getErrorMessage(err, t('errors.updateFailed')))
 		} finally {
 			setIsSaving(false)
 		}
 	}
 
+	// 4. UI: Loading Skeleton
 	if (loading) {
 		return (
-			<div className='max-w-4xl mx-auto space-y-6 pt-6 pb-20'>
+			<div className='max-w-4xl mx-auto space-y-6 pt-6 pb-20 animate-pulse'>
 				<div className='flex items-center gap-4 border-b pb-4'>
 					<Skeleton className='h-10 w-10 rounded-full' />
 					<div className='space-y-2'>
@@ -151,31 +157,37 @@ export default function StudentEditPage() {
 		)
 	}
 
+	// 5. UI: Xatolik holati
 	if (error) {
 		return (
-			<div className='flex flex-col items-center justify-center p-12 text-center h-[60vh]'>
-				<div className='bg-red-50 text-red-500 p-4 rounded-full mb-4'>
-					<ShieldAlert className='h-10 w-10' />
+			<div className='flex flex-col items-center justify-center min-h-[50vh] text-center p-12'>
+				<div className='bg-destructive/10 text-destructive p-5 rounded-full mb-4'>
+					<ShieldAlert className='h-12 w-12' />
 				</div>
-				<h2 className='text-2xl font-bold text-red-500'>Xatolik yuz berdi</h2>
-				<p className='text-muted-foreground mt-2 mb-6'>{error}</p>
+				<h2 className='text-2xl font-bold text-destructive'>
+					{t('errors.errorOccurred') || 'Xatolik yuz berdi'}
+				</h2>
+				<p className='text-muted-foreground mt-2 max-w-sm mb-6'>{error}</p>
 				<Button
 					onClick={() => router.push('/admin/students')}
 					variant='outline'
 				>
-					<ArrowLeft className='mr-2 h-4 w-4' /> Ortga qaytish
+					<ArrowLeft className='mr-2 h-4 w-4' />{' '}
+					{t('common.goBack') || 'Ortga qaytish'}
 				</Button>
 			</div>
 		)
 	}
 
+	// 6. UI: Asosiy Forma
 	return (
 		<motion.div
 			variants={containerVariants}
 			initial='hidden'
 			animate='show'
-			className='max-w-4xl mx-auto space-y-6 pb-20 relative'
+			className='max-w-4xl mx-auto space-y-6 pb-24 pt-2 relative'
 		>
+			{/* 🏷️ PAGE HEADER */}
 			<motion.div
 				variants={itemVariants}
 				className='flex items-center gap-4 border-b pb-4'
@@ -183,7 +195,7 @@ export default function StudentEditPage() {
 				<Button
 					variant='outline'
 					size='icon'
-					className='h-10 w-10 rounded-full shrink-0'
+					className='h-10 w-10 rounded-full shrink-0 shadow-sm'
 					asChild
 				>
 					<Link href={`/admin/students/${id}/view`}>
@@ -192,59 +204,72 @@ export default function StudentEditPage() {
 				</Button>
 				<div>
 					<h1 className='text-2xl font-bold tracking-tight'>
-						Talabani Tahrirlash
+						{t('students.editStudent') || 'Talabani Tahrirlash'}
 					</h1>
-					<p className='text-sm text-muted-foreground font-medium'>
-						Tizimdagi ID: {id}
+					<p className='text-muted-foreground text-sm font-medium font-mono mt-0.5'>
+						ID: {id}
 					</p>
 				</div>
 			</motion.div>
 
 			<form onSubmit={handleSubmit} className='space-y-6'>
+				{/* ASOSIY MA'LUMOTLAR */}
 				<motion.div variants={itemVariants}>
-					<Card className='shadow-sm border-muted'>
-						<CardHeader className='bg-muted/30 border-b pb-4'>
-							<CardTitle className='text-lg'>Asosiy ma'lumotlar</CardTitle>
+					<Card className='shadow-sm border-border bg-card'>
+						<CardHeader className='bg-muted/20 border-b pb-4'>
+							<CardTitle className='text-lg'>
+								{t('mentors.basicInfo') || "Asosiy ma'lumotlar"}
+							</CardTitle>
 						</CardHeader>
 						<CardContent className='p-6 grid grid-cols-1 sm:grid-cols-2 gap-6'>
 							<div className='space-y-2'>
-								<Label htmlFor='firstName'>Ism</Label>
+								<Label htmlFor='firstName'>
+									Ism <span className='text-destructive'>*</span>
+								</Label>
 								<Input
 									id='firstName'
 									name='firstName'
 									value={formData.firstName}
 									onChange={handleChange}
 									required
+									className='bg-background'
 								/>
 							</div>
 							<div className='space-y-2'>
-								<Label htmlFor='lastName'>Familiya</Label>
+								<Label htmlFor='lastName'>
+									Familiya <span className='text-destructive'>*</span>
+								</Label>
 								<Input
 									id='lastName'
 									name='lastName'
 									value={formData.lastName}
 									onChange={handleChange}
 									required
+									className='bg-background'
 								/>
 							</div>
 							<div className='space-y-2 sm:col-span-2 md:col-span-1'>
-								<Label htmlFor='phoneNumber'>Telefon raqam</Label>
+								<Label htmlFor='phoneNumber'>
+									Telefon raqam <span className='text-destructive'>*</span>
+								</Label>
 								<Input
 									id='phoneNumber'
 									type='tel'
 									value={formData.phoneNumber}
 									onChange={handlePhoneChange}
-									placeholder='+998 90 123 4567'
+									placeholder='+998 90 123 45 67'
 									required
+									className='bg-background font-mono'
 								/>
 							</div>
 						</CardContent>
 					</Card>
 				</motion.div>
 
+				{/* O'QUV KURSI VA GURUH */}
 				<motion.div variants={itemVariants}>
-					<Card className='shadow-sm border-muted'>
-						<CardHeader className='bg-muted/30 border-b pb-4'>
+					<Card className='shadow-sm border-border bg-card'>
+						<CardHeader className='bg-muted/20 border-b pb-4'>
 							<CardTitle className='text-lg'>O'quv kursi va Guruh</CardTitle>
 						</CardHeader>
 						<CardContent className='p-6 grid grid-cols-1 sm:grid-cols-2 gap-6'>
@@ -256,33 +281,25 @@ export default function StudentEditPage() {
 										setFormData(p => ({ ...p, course: val }))
 									}
 								>
-									<SelectTrigger>
+									<SelectTrigger className='bg-background'>
 										<SelectValue placeholder='Kursni tanlang' />
 									</SelectTrigger>
 									<SelectContent>
 										<SelectGroup>
 											<SelectLabel>Bakalavr</SelectLabel>
-											<SelectItem value='1-kurs (Bakalavr)'>
-												1-kurs (Bakalavr)
-											</SelectItem>
-											<SelectItem value='2-kurs (Bakalavr)'>
-												2-kurs (Bakalavr)
-											</SelectItem>
-											<SelectItem value='3-kurs (Bakalavr)'>
-												3-kurs (Bakalavr)
-											</SelectItem>
-											<SelectItem value='4-kurs (Bakalavr)'>
-												4-kurs (Bakalavr)
-											</SelectItem>
+											{['1-kurs', '2-kurs', '3-kurs', '4-kurs'].map(k => (
+												<SelectItem key={k} value={`${k} (Bakalavr)`}>
+													{k} (Bakalavr)
+												</SelectItem>
+											))}
 										</SelectGroup>
 										<SelectGroup>
 											<SelectLabel>Magistratura</SelectLabel>
-											<SelectItem value='1-kurs (Magistratura)'>
-												1-kurs (Magistratura)
-											</SelectItem>
-											<SelectItem value='2-kurs (Magistratura)'>
-												2-kurs (Magistratura)
-											</SelectItem>
+											{['1-kurs', '2-kurs'].map(k => (
+												<SelectItem key={k} value={`${k} (Magistratura)`}>
+													{k} (Magistratura)
+												</SelectItem>
+											))}
 										</SelectGroup>
 									</SelectContent>
 								</Select>
@@ -295,7 +312,7 @@ export default function StudentEditPage() {
 										value={formData.groupPrefix}
 										onChange={handleChange}
 										placeholder='320'
-										className='text-center'
+										className='text-center bg-background'
 									/>
 									<span className='text-muted-foreground font-bold'>-</span>
 									<Input
@@ -303,7 +320,7 @@ export default function StudentEditPage() {
 										value={formData.groupSuffix}
 										onChange={handleChange}
 										placeholder='22'
-										className='text-center'
+										className='text-center bg-background'
 									/>
 								</div>
 							</div>
@@ -311,19 +328,21 @@ export default function StudentEditPage() {
 					</Card>
 				</motion.div>
 
+				{/* TIZIM RUXSATLARI (STATUS) */}
 				<motion.div variants={itemVariants}>
-					<Card className='shadow-sm border-red-500/20 bg-red-50/10'>
-						<CardHeader className='border-b border-red-500/10 pb-4'>
-							<CardTitle className='text-lg flex items-center gap-2'>
-								<ShieldAlert className='h-5 w-5 text-red-500' /> Tizim
-								ruxsatlari
+					<Card className='shadow-sm border-destructive/30 bg-destructive/5 dark:bg-destructive/10'>
+						<CardHeader className='border-b border-destructive/10 pb-4 bg-transparent'>
+							<CardTitle className='text-lg flex items-center gap-2 text-destructive'>
+								<ShieldAlert className='h-5 w-5' /> Tizim ruxsatlari
 							</CardTitle>
 						</CardHeader>
 						<CardContent className='p-6'>
-							<div className='flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm bg-card hover:border-red-500/50 transition-colors'>
+							<div
+								className={`flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm bg-card transition-colors ${formData.status === 'blocked' ? 'border-destructive/50' : 'hover:border-primary/40'}`}
+							>
 								<div className='space-y-1 w-2/3 pr-4'>
 									<Label
-										className={`text-base font-bold ${formData.status === 'blocked' ? 'text-red-500' : 'text-foreground'}`}
+										className={`text-base font-bold ${formData.status === 'blocked' ? 'text-destructive' : 'text-foreground'}`}
 									>
 										Talaba holati
 									</Label>
@@ -338,24 +357,20 @@ export default function StudentEditPage() {
 									}
 								>
 									<SelectTrigger
-										className={`w-[130px] font-semibold ${
-											formData.status === 'blocked'
-												? 'text-red-500 border-red-200 bg-red-50'
-												: 'text-green-600 border-green-200 bg-green-50'
-										}`}
+										className={`w-[130px] font-semibold ${formData.status === 'blocked' ? 'text-destructive border-destructive/30 bg-destructive/10' : 'text-green-600 dark:text-green-400 border-green-500/30 bg-green-500/10'}`}
 									>
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>
 										<SelectItem
 											value='active'
-											className='text-green-600 font-medium'
+											className='text-green-600 dark:text-green-400 font-medium'
 										>
 											Faol
 										</SelectItem>
 										<SelectItem
 											value='blocked'
-											className='text-red-500 font-medium'
+											className='text-destructive font-medium'
 										>
 											Bloklangan
 										</SelectItem>
@@ -366,9 +381,10 @@ export default function StudentEditPage() {
 					</Card>
 				</motion.div>
 
+				{/* 🔒 STICKY FOOTER (SAVE BUTTONS) */}
 				<motion.div
 					variants={itemVariants}
-					className='flex justify-end gap-3 p-4 bg-background/90 backdrop-blur-md rounded-xl border shadow-lg sticky bottom-4 z-50'
+					className='flex justify-end gap-3 p-4 bg-background/80 backdrop-blur-xl rounded-xl border border-border/50 shadow-lg sticky bottom-4 z-50 transition-all hover:shadow-xl'
 				>
 					<Button
 						type='button'
@@ -376,19 +392,19 @@ export default function StudentEditPage() {
 						onClick={() => router.back()}
 						disabled={isSaving}
 					>
-						Bekor qilish
+						{t('common.cancel') || 'Bekor qilish'}
 					</Button>
 					<Button
 						type='submit'
 						disabled={isSaving}
-						className='px-8 bg-primary font-semibold'
+						className='px-8 bg-primary font-semibold shadow-md'
 					>
 						{isSaving ? (
 							<Loader2 className='mr-2 h-4 w-4 animate-spin' />
 						) : (
 							<Save className='mr-2 h-4 w-4' />
 						)}
-						O'zgarishlarni saqlash
+						{t('common.saveChanges') || "O'zgarishlarni saqlash"}
 					</Button>
 				</motion.div>
 			</form>

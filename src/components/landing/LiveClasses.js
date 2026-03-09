@@ -5,27 +5,21 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import api from '@/lib/api'
+import { useTranslation } from '@/lib/i18n'
+// 🔥 Markazlashgan utilitalar
+import { getInitials } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import { ArrowRight, CheckCircle, Star, Users } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
-const getInitials = (firstName, lastName) => {
-	const first = firstName ? firstName[0] : ''
-	const last = lastName ? lastName[0] : ''
-	return (first + last).toUpperCase()
-}
-
 const containerVariants = {
 	hidden: { opacity: 0 },
-	show: {
-		opacity: 1,
-		transition: { staggerChildren: 0.15 },
-	},
+	show: { opacity: 1, transition: { staggerChildren: 0.1 } },
 }
 
 const cardVariants = {
-	hidden: { opacity: 0, y: 30 },
+	hidden: { opacity: 0, y: 15 },
 	show: {
 		opacity: 1,
 		y: 0,
@@ -34,6 +28,7 @@ const cardVariants = {
 }
 
 export default function TopMentors() {
+	const { t } = useTranslation()
 	const [mentors, setMentors] = useState([])
 	const [loading, setLoading] = useState(true)
 
@@ -45,7 +40,7 @@ export default function TopMentors() {
 					setMentors(res.data.mentors)
 				}
 			} catch (error) {
-				console.error(error)
+				console.error('Mentorlarni yuklashda xatolik:', error)
 			} finally {
 				setLoading(false)
 			}
@@ -54,8 +49,9 @@ export default function TopMentors() {
 	}, [])
 
 	return (
-		<section className='w-full py-16 md:py-24 bg-secondary/10 border-y overflow-hidden'>
-			<div className='container mx-auto px-4 md:px-8 max-w-7xl'>
+		<section className='w-full py-20 md:py-32 bg-muted/20 border-y'>
+			<div className='container mx-auto px-4 sm:px-6 md:px-8 max-w-6xl'>
+				{/* 🏷️ HEADER SECTION */}
 				<div className='flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6'>
 					<motion.div
 						initial={{ opacity: 0, x: -20 }}
@@ -64,17 +60,18 @@ export default function TopMentors() {
 						className='max-w-2xl'
 					>
 						<Badge
-							variant='outline'
-							className='mb-4 text-primary border-primary/30 bg-primary/5'
+							variant='secondary'
+							className='mb-4 text-xs font-bold uppercase tracking-wider text-muted-foreground shadow-none'
 						>
-							Eng yaxshilari
+							{t('landing.topMentors.badge') || 'Top Ustozlar'}
 						</Badge>
-						<h2 className='text-3xl md:text-4xl font-extrabold tracking-tight mb-4 text-balance'>
-							Top Mentorlarimiz bilan tanishing
+						<h2 className='text-3xl md:text-4xl font-extrabold tracking-tight mb-4 text-foreground'>
+							{t('landing.topMentors.title') ||
+								'Platformaning yetakchi mentorlari'}
 						</h2>
-						<p className='text-muted-foreground text-lg'>
-							O'z yo'nalishi bo'yicha yetakchi bo'lgan va ko'plab talabalarga
-							yordam berayotgan tajribali tengdoshlaringiz.
+						<p className='text-muted-foreground text-base sm:text-lg'>
+							{t('landing.topMentors.desc') ||
+								"O'z yo'nalishining eng kuchli mutaxassislaridan ta'lim oling."}
 						</p>
 					</motion.div>
 
@@ -83,101 +80,112 @@ export default function TopMentors() {
 						whileInView={{ opacity: 1, x: 0 }}
 						viewport={{ once: true }}
 					>
-						<Link href='/home/mentors'>
-							<Button
-								variant='outline'
-								className='gap-2 font-medium hover:bg-primary hover:text-primary-foreground transition-all duration-300 group'
-							>
-								Barchasini ko'rish
-								<ArrowRight className='h-4 w-4 group-hover:translate-x-1 transition-transform' />
-							</Button>
-						</Link>
+						<Button
+							variant='outline'
+							className='gap-2 font-medium group'
+							asChild
+						>
+							<Link href='/home/mentors'>
+								{t('landing.topMentors.viewAll') || "Barchasini ko'rish"}
+								<ArrowRight className='h-4 w-4 transition-transform group-hover:translate-x-1' />
+							</Link>
+						</Button>
 					</motion.div>
 				</div>
 
+				{/* 🗂️ MAIN CONTENT */}
 				{loading ? (
-					<div className='grid sm:grid-cols-2 lg:grid-cols-3 gap-8'>
+					// Skeleton Loader
+					<div className='grid sm:grid-cols-2 lg:grid-cols-3 gap-6'>
 						{[1, 2, 3].map(item => (
 							<div
 								key={item}
-								className='relative h-full rounded-3xl border bg-background flex flex-col overflow-hidden min-h-[380px]'
+								className='relative rounded-xl border bg-card flex flex-col overflow-hidden min-h-[350px]'
 							>
-								<Skeleton className='h-24 w-full rounded-none rounded-t-3xl' />
-
+								<Skeleton className='h-24 w-full rounded-none' />
 								<div className='px-6 relative flex justify-between items-end -mt-10 mb-4'>
 									<Skeleton className='h-20 w-20 rounded-full border-4 border-background' />
-									<Skeleton className='h-7 w-12 rounded-full mb-2' />
+									<Skeleton className='h-6 w-12 rounded-md mb-2' />
 								</div>
-
 								<div className='px-6 pb-6 flex-1 flex flex-col'>
-									<Skeleton className='h-7 w-3/4 mb-2' />
-									<Skeleton className='h-5 w-1/2 mb-5' />
-
+									<Skeleton className='h-6 w-3/4 mb-2' />
+									<Skeleton className='h-4 w-1/2 mb-5' />
 									<div className='flex flex-wrap gap-2 mb-6'>
-										<Skeleton className='h-6 w-16 rounded-full' />
-										<Skeleton className='h-6 w-20 rounded-full' />
-										<Skeleton className='h-6 w-14 rounded-full' />
+										<Skeleton className='h-5 w-16 rounded-md' />
+										<Skeleton className='h-5 w-20 rounded-md' />
 									</div>
-
-									<div className='mt-auto pt-4 border-t flex items-center justify-between'>
-										<Skeleton className='h-5 w-24' />
-										<Skeleton className='h-5 w-20' />
+									<div className='mt-auto pt-4 border-t flex justify-between'>
+										<Skeleton className='h-4 w-24' />
+										<Skeleton className='h-4 w-20' />
 									</div>
 								</div>
 							</div>
 						))}
 					</div>
 				) : mentors.length === 0 ? (
-					<div className='text-center py-16'>
-						<p className='text-muted-foreground text-lg'>
-							Hozircha mentorlar mavjud emas.
+					// Empty State
+					<div className='text-center py-20 border border-dashed rounded-2xl bg-muted/10'>
+						<p className='text-muted-foreground text-base font-medium'>
+							{t('landing.topMentors.empty') || "Hozircha mentorlar yo'q"}
 						</p>
 					</div>
 				) : (
+					// Mentor Cards
 					<motion.div
 						variants={containerVariants}
 						initial='hidden'
 						whileInView='show'
 						viewport={{ once: true, margin: '-50px' }}
-						className='grid sm:grid-cols-2 lg:grid-cols-3 gap-8'
+						className='grid sm:grid-cols-2 lg:grid-cols-3 gap-6'
 					>
 						{mentors.slice(0, 3).map(mentor => (
-							<motion.div key={mentor._id} variants={cardVariants}>
+							<motion.div
+								key={mentor._id || mentor.id}
+								variants={cardVariants}
+								className='h-full'
+							>
 								<Link
-									href={`/home/mentors/${mentor._id}`}
+									href={`/home/mentors/${mentor._id || mentor.id}`}
 									className='block h-full group'
 								>
-									<div className='relative h-full rounded-3xl border bg-background flex flex-col hover:border-primary/50 hover:shadow-2xl hover:shadow-primary/10 transition-all duration-500'>
-										<div className='h-24 w-full bg-gradient-to-r from-primary/10 to-secondary/20 rounded-t-3xl relative overflow-hidden group-hover:from-primary/20 group-hover:to-secondary/30 transition-colors duration-500'>
-											<div className='absolute -bottom-10 -right-10 w-32 h-32 bg-background/20 rounded-full blur-2xl'></div>
+									<div className='relative h-full rounded-xl border bg-card flex flex-col hover:border-primary/40 hover:shadow-md transition-all duration-300'>
+										{/* Cover Photo */}
+										<div className='h-24 w-full bg-muted border-b relative overflow-hidden group-hover:bg-muted/80 transition-colors'>
+											<div className='absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-50' />
 										</div>
 
+										{/* Avatar & Rating */}
 										<div className='px-6 relative flex justify-between items-end -mt-10 mb-4'>
-											<Avatar className='h-20 w-20 border-4 border-background shadow-md bg-muted'>
-												<AvatarFallback className='text-xl font-bold text-primary'>
+											<Avatar className='h-20 w-20 border-4 border-background shadow-sm bg-muted shrink-0'>
+												<AvatarFallback className='text-lg font-bold text-foreground'>
 													{getInitials(mentor.firstName, mentor.lastName)}
 												</AvatarFallback>
 											</Avatar>
 
-											<div className='flex items-center gap-1.5 bg-background border shadow-sm px-3 py-1 rounded-full mb-2'>
-												<Star className='h-4 w-4 text-yellow-500 fill-yellow-500' />
-												<span className='text-sm font-bold'>
-													{mentor.rating > 0 ? mentor.rating : '—'}
+											<div className='flex items-center gap-1 bg-background border shadow-sm px-2 py-1 rounded-md mb-2 shrink-0'>
+												<Star className='h-3.5 w-3.5 text-amber-500 fill-amber-500' />
+												<span className='text-xs font-bold'>
+													{mentor.rating > 0 ? mentor.rating : 'N/A'}
 												</span>
 											</div>
 										</div>
 
+										{/* Content */}
 										<div className='px-6 pb-6 flex-1 flex flex-col'>
-											<div className='flex items-center gap-2 mb-1'>
-												<h3 className='font-extrabold text-xl group-hover:text-primary transition-colors'>
+											<div className='flex items-center gap-1.5 mb-1'>
+												<h3 className='font-bold text-lg text-foreground group-hover:text-primary transition-colors leading-tight'>
 													{mentor.firstName} {mentor.lastName?.charAt(0)}.
 												</h3>
-												<CheckCircle className='h-4 w-4 text-blue-500' />
+												<CheckCircle className='h-4 w-4 text-blue-500 shrink-0' />
 											</div>
-											<p className='text-muted-foreground font-medium mb-4'>
-												{mentor.specialty || 'Mentor'}
+
+											<p className='text-sm text-muted-foreground font-medium mb-4'>
+												{mentor.specialty ||
+													t('landing.topMentors.defaultSpecialty') ||
+													'Mentor'}
 											</p>
 
+											{/* Skills */}
 											<div className='flex flex-wrap gap-2 mb-6'>
 												{(mentor.skills || [])
 													.slice(0, 3)
@@ -185,22 +193,25 @@ export default function TopMentors() {
 														<Badge
 															key={index}
 															variant='secondary'
-															className='bg-muted hover:bg-muted font-normal text-xs'
+															className='font-normal text-[10px] uppercase shadow-none border-transparent'
 														>
 															{skill}
 														</Badge>
 													))}
 											</div>
 
+											{/* Footer Info */}
 											<div className='mt-auto pt-4 border-t flex items-center justify-between'>
-												<div className='flex items-center gap-2 text-muted-foreground'>
+												<div className='flex items-center gap-1.5 text-muted-foreground'>
 													<Users className='h-4 w-4' />
-													<span className='text-sm font-medium'>
-														{mentor.studentsCount || 0} ta o'quvchi
+													<span className='text-xs font-bold'>
+														{mentor.studentsCount || 0}{' '}
+														{t('common.students') || "o'quvchilar"}
 													</span>
 												</div>
-												<span className='text-sm font-bold text-primary opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300'>
-													Profilga o'tish &rarr;
+												<span className='text-xs font-bold text-primary opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300'>
+													{t('landing.topMentors.viewProfile') || 'Profil'}{' '}
+													&rarr;
 												</span>
 											</div>
 										</div>

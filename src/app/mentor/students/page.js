@@ -3,16 +3,9 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from '@/components/ui/table'
+import { DataTable } from '@/components/ui/data-table'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { PageHeader } from '@/components/ui/page-header'
 import {
 	Tooltip,
 	TooltipContent,
@@ -20,29 +13,25 @@ import {
 	TooltipTrigger,
 } from '@/components/ui/tooltip'
 import api from '@/lib/api'
+import { useTranslation } from '@/lib/i18n'
+// 🔥 Markazlashgan utilitalar chaqirildi
+import { formatPhone, getErrorMessage, getInitials } from '@/lib/utils'
 import { motion } from 'framer-motion'
-import {
-	BookOpen,
-	GraduationCap,
-	Mail,
-	Phone,
-	Search,
-	User,
-} from 'lucide-react'
+import { BookOpen, GraduationCap, Mail, Phone, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner' // 🔥 Toast ishlatamiz
 
-// Animatsiya variantlari
+// ==========================================
+// 🎨 ANIMATSIYALAR
+// ==========================================
 const containerVariants = {
 	hidden: { opacity: 0 },
-	show: {
-		opacity: 1,
-		transition: { staggerChildren: 0.1 },
-	},
+	show: { opacity: 1, transition: { staggerChildren: 0.1 } },
 }
 
 const itemVariants = {
-	hidden: { opacity: 0, y: 20 },
+	hidden: { opacity: 0, y: 15 },
 	show: {
 		opacity: 1,
 		y: 0,
@@ -50,328 +39,242 @@ const itemVariants = {
 	},
 }
 
-const MotionTableRow = motion(TableRow)
-
-// Telefon raqamini formatlash
-const formatPhone = phoneStr => {
-	if (!phoneStr || phoneStr === 'Kiritilmagan') return phoneStr
-	const cleaned = phoneStr.replace(/\D/g, '')
-	if (cleaned.length === 12 && cleaned.startsWith('998')) {
-		return `+998 ${cleaned.slice(3, 5)} ${cleaned.slice(5, 8)} ${cleaned.slice(8, 12)}`
-	}
-	return phoneStr
-}
-
+// ==========================================
+// 🚀 ASOSIY KOMPONENT (Content)
+// ==========================================
 function MentorStudentsContent() {
 	const router = useRouter()
+	const { t } = useTranslation()
+
 	const [students, setStudents] = useState([])
-	const [filteredStudents, setFilteredStudents] = useState([])
-	const [loading, setLoading] = useState(true)
-	const [searchQuery, setSearchQuery] = useState('')
+	const [isLoading, setIsLoading] = useState(true)
 
-	useEffect(() => {
-		const fetchStudents = async () => {
-			try {
-				const res = await api.get('/mentor/students')
-				if (res.data.success) {
-					const mapped = res.data.students.map((s, idx) => ({
-						...s,
-						index: idx + 1,
-						avatar:
-							(s.firstName?.charAt(0) || '') + (s.lastName?.charAt(0) || ''),
-						phoneNumber: s.phoneNumber || 'Kiritilmagan',
-						course: s.course || 'Kurs kiritilmagan',
-						group: s.group || 'Kiritilmagan',
-					}))
-					setStudents(mapped)
-					setFilteredStudents(mapped)
-				}
-			} catch (error) {
-				console.error('Talabalarni olishda xatolik:', error)
-			} finally {
-				setLoading(false)
+	// 1. API dan ma'lumot yuklash
+	const fetchStudents = useCallback(async () => {
+		try {
+			setIsLoading(true)
+			const res = await api.get('/mentor/students')
+			if (res?.data?.success) {
+				const mapped = res.data.students.map((s, idx) => ({
+					...s,
+					id: s._id || s.id, // Xavfsiz ID
+					index: idx + 1,
+					fullName:
+						`${s.firstName || ''} ${s.lastName || ''}`.trim() || "Noma'lum",
+					phoneNumber: s.phoneNumber || '',
+				}))
+				setStudents(mapped)
 			}
+		} catch (error) {
+			toast.error(
+				getErrorMessage(
+					error,
+					t('errors.fetchFailed') || 'Talabalarni yuklashda xatolik',
+				),
+			)
+		} finally {
+			setIsLoading(false)
 		}
-
-		fetchStudents()
-	}, [])
+	}, [t])
 
 	useEffect(() => {
-		if (!searchQuery) {
-			setFilteredStudents(students)
-			return
-		}
+		fetchStudents()
+	}, [fetchStudents])
 
-		const lowerQuery = searchQuery.toLowerCase()
-		const filtered = students.filter(
-			s =>
-				s.firstName?.toLowerCase().includes(lowerQuery) ||
-				s.lastName?.toLowerCase().includes(lowerQuery) ||
-				s.phoneNumber?.toLowerCase().includes(lowerQuery) ||
-				s.course?.toLowerCase().includes(lowerQuery),
-		)
-		setFilteredStudents(filtered)
-	}, [searchQuery, students])
+	// 2. Xabar yozish
+	const handleMessageClick = useCallback(
+		studentId => {
+			if (!studentId) return
+			sessionStorage.setItem('selectedContact', studentId)
+			router.push('/users/messages')
+		},
+		[router],
+	)
 
-	const handleMessageClick = studentId => {
-		sessionStorage.setItem('selectedContact', studentId) // 'targetMessageId' o'rniga kontakt uchun ishlatilgan key
-		router.push('/users/messages')
-	}
+	// 3. Jadval ustunlari (Toza Shadcn uslubi)
+	const columns = useMemo(
+		() => [
+			{
+				header: 'T/R',
+				key: 'index',
+				headerClassName: 'w-[60px]',
+				cellClassName: 'font-medium text-muted-foreground',
+			},
+			{
+				header: t('sidebar.students') || 'Talaba F.I.O',
+				render: row => (
+					<div className='flex items-center gap-3'>
+						<Avatar className='h-9 w-9 border shadow-sm'>
+							<AvatarFallback className='bg-primary/5 text-primary text-xs font-bold uppercase'>
+								{getInitials(row.firstName, row.lastName)}
+							</AvatarFallback>
+						</Avatar>
+						<div>
+							<p className='font-semibold text-foreground leading-none mb-1'>
+								{row.fullName}
+							</p>
+							<p className='text-xs text-muted-foreground font-medium md:hidden mt-1'>
+								{row.course || t('common.notEntered')} •{' '}
+								{row.group || t('common.notEntered')}
+							</p>
+						</div>
+					</div>
+				),
+			},
+			{
+				header: t('mentors.phone') || 'Aloqa',
+				render: row =>
+					row.phoneNumber ? (
+						<a
+							href={`tel:${row.phoneNumber.replace(/\D/g, '')}`}
+							className='font-medium whitespace-nowrap text-primary hover:underline flex items-center gap-1.5 w-fit'
+							onClick={e => e.stopPropagation()}
+						>
+							<Phone className='h-3.5 w-3.5' />
+							{formatPhone(row.phoneNumber)}
+						</a>
+					) : (
+						<span className='text-muted-foreground text-sm'>
+							{t('common.notEntered')}
+						</span>
+					),
+			},
+			{
+				header: t('mentors.group') || "O'quv bosqichi / Guruh",
+				headerClassName: 'hidden md:table-cell',
+				cellClassName: 'hidden md:table-cell',
+				render: row => (
+					<div className='flex flex-wrap items-center gap-2'>
+						<Badge
+							variant='outline'
+							className='font-medium bg-muted/50 text-foreground'
+						>
+							{row.course || t('common.notEntered')}
+						</Badge>
+						<Badge
+							variant='secondary'
+							className='font-medium bg-muted/50 text-foreground'
+						>
+							{row.group || t('common.notEntered')}
+						</Badge>
+					</div>
+				),
+			},
+			{
+				header: t('dashboard.attended') || 'Qatnashishi',
+				headerClassName: 'text-center',
+				cellClassName: 'text-center',
+				render: row => (
+					<TooltipProvider>
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<Badge
+									variant='secondary'
+									className='font-medium cursor-help flex items-center gap-1.5 mx-auto w-fit bg-primary/10 text-primary hover:bg-primary/20 transition-colors shadow-none border-transparent'
+								>
+									<BookOpen className='h-3.5 w-3.5' />
+									{row.lessonsAttended || 0} ta dars
+								</Badge>
+							</TooltipTrigger>
+							<TooltipContent>
+								{t('dashboard.attendanceDesc') ||
+									"Umumiy ro'yxatdan o'tgan yoki qatnashgan darslar soni"}
+							</TooltipContent>
+						</Tooltip>
+					</TooltipProvider>
+				),
+			},
+			{
+				header: t('common.actions') || 'Harakatlar',
+				headerClassName: 'text-right',
+				cellClassName: 'text-right',
+				render: row => (
+					<Button
+						size='sm'
+						variant='outline'
+						className='gap-2 font-medium'
+						onClick={e => {
+							e.stopPropagation()
+							handleMessageClick(row.id)
+						}}
+					>
+						<Mail className='h-4 w-4' />
+						<span className='hidden sm:inline'>
+							{t('dashboard.sendMessage') || 'Xabar yozish'}
+						</span>
+					</Button>
+				),
+			},
+		],
+		[t, handleMessageClick],
+	)
 
 	return (
 		<motion.div
 			variants={containerVariants}
 			initial='hidden'
 			animate='show'
-			className='space-y-6 max-w-7xl mx-auto pb-8'
+			className='space-y-6 max-w-7xl mx-auto pb-12 pt-6 px-4 sm:px-6'
 		>
-			{/* HEADER QISMI */}
-			<motion.div
-				variants={itemVariants}
-				className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'
-			>
-				<div>
-					<h1 className='text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2'>
-						<GraduationCap className='h-7 w-7 text-primary' /> Mening
-						O'quvchilarim
-					</h1>
-					<p className='text-muted-foreground mt-1'>
-						Sizning darslaringizga yozilgan va qatnashgan barcha talabalar
-						ro'yxati.
-					</p>
-				</div>
-				<div className='bg-primary/10 text-primary px-4 py-1 rounded-xl font-bold flex items-center gap-2 border border-primary/20 shadow-sm'>
-					<User className='h-4 w-4' />
-					Jami: {students.length} ta
-				</div>
-			</motion.div>
+			{/* 🏷️ HEADER */}
+			<PageHeader
+				title={
+					<span className='flex items-center gap-3'>
+						<GraduationCap className='h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground' />
+						{t('sidebar.students') || "Mening O'quvchilarim"}
+					</span>
+				}
+				description={
+					t('dashboard.myStudentsDesc') ||
+					"Sizning darslaringizga yozilgan va qatnashgan barcha talabalar ro'yxati."
+				}
+			/>
 
-			{/* QIDIRUV VA FILTR */}
-			<motion.div
-				variants={itemVariants}
-				className='flex flex-col sm:flex-row sm:items-center justify-between bg-card p-4 rounded-xl border shadow-sm gap-4'
-			>
-				<div className='relative w-full max-w-md'>
-					<Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
-					<Input
-						placeholder="Ism, telefon yoki kurs bo'yicha qidiruv..."
-						className='pl-9 bg-background focus-visible:ring-primary'
-						value={searchQuery}
-						onChange={e => setSearchQuery(e.target.value)}
-					/>
-				</div>
-				<div className='flex items-center gap-2'>
-					<Badge variant='secondary' className='px-3 py-1 text-sm font-medium'>
-						Natija: {filteredStudents.length} ta
+			{/* 📊 QISQACHA STATISTIKA */}
+			{!isLoading && (
+				<motion.div
+					variants={itemVariants}
+					className='flex flex-col sm:flex-row sm:items-center justify-between border-b pb-4'
+				>
+					<Badge
+						variant='secondary'
+						className='px-3 py-1.5 text-sm font-medium flex items-center gap-2 w-fit'
+					>
+						<Users className='h-4 w-4 text-muted-foreground' />
+						{t('common.all') || 'Jami'}: {students.length} ta
 					</Badge>
-				</div>
-			</motion.div>
+				</motion.div>
+			)}
 
-			{/* JADVAL QISMI */}
-			<motion.div
-				variants={itemVariants}
-				className='bg-card rounded-xl border shadow-sm overflow-hidden'
-			>
-				<div className='overflow-x-auto'>
-					<Table>
-						<TableHeader className='bg-muted/50'>
-							<TableRow>
-								<TableHead className='w-[80px] font-bold'>T/R</TableHead>
-								<TableHead className='font-bold'>Talaba F.I.O</TableHead>
-								<TableHead className='font-bold'>Aloqa</TableHead>
-								<TableHead className='font-bold'>
-									O'quv bosqichi / Guruh
-								</TableHead>
-								<TableHead className='font-bold text-center'>
-									Qatnashishi
-								</TableHead>
-								<TableHead className='text-right font-bold'>
-									Harakatlar
-								</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{loading ? (
-								Array.from({ length: 5 }).map((_, idx) => (
-									<TableRow key={idx}>
-										<TableCell>
-											<Skeleton className='h-4 w-6' />
-										</TableCell>
-										<TableCell>
-											<div className='flex items-center gap-3'>
-												<Skeleton className='h-9 w-9 rounded-full shrink-0' />
-												<div className='space-y-2'>
-													<Skeleton className='h-4 w-32' />
-													<Skeleton className='h-3 w-20' />
-												</div>
-											</div>
-										</TableCell>
-										<TableCell>
-											<Skeleton className='h-4 w-28' />
-										</TableCell>
-										<TableCell>
-											<div className='flex items-center gap-2'>
-												<Skeleton className='h-5 w-16 rounded-full' />
-												<Skeleton className='h-5 w-12 rounded-full' />
-											</div>
-										</TableCell>
-										<TableCell>
-											<Skeleton className='h-6 w-20 mx-auto rounded-full' />
-										</TableCell>
-										<TableCell className='text-right'>
-											<Skeleton className='h-8 w-24 ml-auto rounded-md' />
-										</TableCell>
-									</TableRow>
-								))
-							) : filteredStudents.length > 0 ? (
-								filteredStudents.map(student => (
-									<MotionTableRow
-										key={student.id}
-										variants={itemVariants}
-										className='hover:bg-muted/30 transition-colors'
-									>
-										<TableCell className='font-medium text-muted-foreground'>
-											{student.index}
-										</TableCell>
-
-										<TableCell>
-											<div className='flex items-center gap-3'>
-												<Avatar className='h-9 w-9 border border-background shadow-sm'>
-													<AvatarFallback className='bg-primary/10 text-primary font-bold text-xs uppercase'>
-														{student.avatar}
-													</AvatarFallback>
-												</Avatar>
-												<div>
-													<p className='font-semibold text-foreground leading-none mb-1'>
-														{student.firstName} {student.lastName}
-													</p>
-													<p className='text-[10px] text-muted-foreground uppercase tracking-wider font-semibold md:hidden'>
-														{student.course} • {student.group}
-													</p>
-												</div>
-											</div>
-										</TableCell>
-
-										<TableCell>
-											{student.phoneNumber !== 'Kiritilmagan' ? (
-												<a
-													href={`tel:${student.phoneNumber.replace(/\s+/g, '')}`}
-													className='font-medium whitespace-nowrap text-primary hover:underline flex items-center gap-1.5 w-fit text-sm'
-												>
-													<Phone className='h-3.5 w-3.5' />
-													{formatPhone(student.phoneNumber)}
-												</a>
-											) : (
-												<span className='text-muted-foreground text-sm'>
-													Kiritilmagan
-												</span>
-											)}
-										</TableCell>
-
-										<TableCell className='hidden md:table-cell'>
-											<div className='flex flex-wrap items-center gap-1.5'>
-												<Badge
-													variant='outline'
-													className='font-semibold bg-blue-50 text-blue-700 border-none'
-												>
-													{student.course}
-												</Badge>
-												<Badge
-													variant='secondary'
-													className='font-semibold bg-indigo-50 text-indigo-700 border-none'
-												>
-													{student.group}
-												</Badge>
-											</div>
-										</TableCell>
-
-										<TableCell className='text-center'>
-											<TooltipProvider>
-												<Tooltip>
-													<TooltipTrigger asChild>
-														<Badge
-															variant='secondary'
-															className='bg-green-500/10 text-green-600 hover:bg-green-500/20 border-none font-bold cursor-help px-3 py-1 gap-1.5'
-														>
-															<BookOpen className='h-3.5 w-3.5' />
-															{student.lessonsAttended || 0} ta dars
-														</Badge>
-													</TooltipTrigger>
-													<TooltipContent>
-														Umumiy ro'yxatdan o'tgan yoki qatnashgan darslar
-														soni
-													</TooltipContent>
-												</Tooltip>
-											</TooltipProvider>
-										</TableCell>
-
-										<TableCell className='text-right'>
-											<Button
-												size='sm'
-												variant='secondary'
-												className='bg-primary/10 text-primary hover:bg-primary hover:text-black transition-colors rounded-lg gap-2 font-semibold'
-												onClick={() => handleMessageClick(student.id)}
-											>
-												<Mail className='h-4 w-4' />
-												<span className='hidden sm:inline'>Xabar yozish</span>
-											</Button>
-										</TableCell>
-									</MotionTableRow>
-								))
-							) : (
-								<TableRow>
-									<TableCell
-										colSpan={6}
-										className='h-32 text-center text-muted-foreground'
-									>
-										{searchQuery
-											? 'Qidiruvingizga mos talaba topilmadi.'
-											: 'Sizning darslaringizga hali hech kim yozilmagan.'}
-									</TableCell>
-								</TableRow>
-							)}
-						</TableBody>
-					</Table>
-				</div>
-
-				{/* FOOTER */}
-				<div className='p-4 border-t flex items-center justify-between text-sm text-muted-foreground bg-muted/20'>
-					<p>
-						Jami {filteredStudents.length} ta natijadan 1-
-						{filteredStudents.length} tasi ko'rsatilmoqda.
-					</p>
-					<div className='flex gap-2'>
-						<Button variant='outline' size='sm' disabled>
-							Oldingi
-						</Button>
-						<Button variant='outline' size='sm' disabled>
-							Keyingi
-						</Button>
-					</div>
-				</div>
+			{/* 🗂️ JADVAL */}
+			<motion.div variants={itemVariants}>
+				<DataTable
+					columns={columns}
+					data={students}
+					isLoading={isLoading}
+					searchPlaceholder={
+						t('dashboard.searchStudentPlaceholder') ||
+						"Ism, telefon yoki kurs bo'yicha qidiruv..."
+					}
+					searchKey={row =>
+						`${row.fullName} ${row.course} ${row.group} ${row.phoneNumber}`
+					}
+					emptyProps={{
+						title: t('common.noResults') || 'Talaba topilmadi',
+						description:
+							t('dashboard.noStudentsFound') ||
+							"Sizning darslaringizga hali hech kim yozilmagan yoki qidiruvga mos talaba yo'q.",
+					}}
+				/>
 			</motion.div>
 		</motion.div>
 	)
 }
 
-// Sahifa boshida Skeletonni Suspanse orqali o'rash (Layout va Page renderini toza saqlash uchun)
+// Suspense Layout (Next.js qoidasi)
 export default function MentorStudentsPage() {
 	return (
-		<Suspense
-			fallback={
-				<div className='space-y-6 max-w-7xl mx-auto pb-8 p-6'>
-					<div className='flex justify-between'>
-						<div className='space-y-2'>
-							<Skeleton className='h-8 w-48' />
-							<Skeleton className='h-4 w-64' />
-						</div>
-						<Skeleton className='h-10 w-32 rounded-xl' />
-					</div>
-					<Skeleton className='h-16 w-full rounded-xl' />
-					<Skeleton className='h-[400px] w-full rounded-xl' />
-				</div>
-			}
-		>
+		<Suspense fallback={<LoadingSpinner fullScreen />}>
 			<MentorStudentsContent />
 		</Suspense>
 	)

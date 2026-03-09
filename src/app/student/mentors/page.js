@@ -3,33 +3,29 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from '@/components/ui/table'
+import { DataTable } from '@/components/ui/data-table'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { PageHeader } from '@/components/ui/page-header'
 import api from '@/lib/api'
+import { useTranslation } from '@/lib/i18n'
+// 🔥 Markazlashgan utilitalar
+import { getErrorMessage, getInitials } from '@/lib/utils'
 import { motion } from 'framer-motion'
-import { BookOpen, ChevronRight, Search, Star, Users } from 'lucide-react'
+import { BookOpen, ChevronRight, Star, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 
-// --- ANIMATION VARIANTS ---
+// ==========================================
+// 🎨 ANIMATSIYALAR
+// ==========================================
 const containerVariants = {
 	hidden: { opacity: 0 },
-	show: {
-		opacity: 1,
-		transition: { staggerChildren: 0.1 },
-	},
+	show: { opacity: 1, transition: { staggerChildren: 0.1 } },
 }
 
 const itemVariants = {
-	hidden: { opacity: 0, y: 20 },
+	hidden: { opacity: 0, y: 15 },
 	show: {
 		opacity: 1,
 		y: 0,
@@ -37,36 +33,133 @@ const itemVariants = {
 	},
 }
 
-const MotionTableRow = motion(TableRow)
-
-export default function StudentMentorsPage() {
+// ==========================================
+// 🚀 ASOSIY KOMPONENT
+// ==========================================
+function StudentMentorsContent() {
 	const router = useRouter()
+	const { t } = useTranslation()
+
 	const [mentors, setMentors] = useState([])
-	const [searchQuery, setSearchQuery] = useState('')
-	const [loading, setLoading] = useState(true)
+	const [isLoading, setIsLoading] = useState(true)
+
+	// 1. API dan mentorlarni yuklash
+	const fetchMentors = useCallback(async () => {
+		try {
+			setIsLoading(true)
+			const res = await api.get('/student/mentors')
+			if (res?.data?.success) {
+				const mapped = res.data.mentors.map((m, idx) => ({
+					...m,
+					id: m._id || m.id, // Xavfsiz ID
+					index: idx + 1,
+				}))
+				setMentors(mapped)
+			}
+		} catch (error) {
+			toast.error(
+				getErrorMessage(
+					error,
+					t('errors.fetchFailed') || 'Mentorlarni yuklashda xatolik yuz berdi',
+				),
+			)
+		} finally {
+			setIsLoading(false)
+		}
+	}, [t])
 
 	useEffect(() => {
-		const fetchMentors = async () => {
-			try {
-				const res = await api.get('/student/mentors')
-				if (res.data.success) {
-					setMentors(res.data.mentors)
-				}
-			} catch (error) {
-				console.error('Mentorlarni yuklashda xatolik:', error)
-			} finally {
-				setLoading(false)
-			}
-		}
 		fetchMentors()
-	}, [])
+	}, [fetchMentors])
 
-	const filteredMentors = mentors.filter(
-		mentor =>
-			(mentor.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-			(mentor.specialty || '')
-				.toLowerCase()
-				.includes(searchQuery.toLowerCase()),
+	// 2. Jadval ustunlari (Shadcn minimalizmi)
+	const columns = useMemo(
+		() => [
+			{
+				header: 'T/R',
+				key: 'index',
+				headerClassName: 'w-[60px]',
+				cellClassName: 'font-medium text-muted-foreground',
+			},
+			{
+				header: t('dashboard.mentor') || 'Mentor',
+				headerClassName: 'min-w-[250px]',
+				render: row => (
+					<div className='flex items-center gap-3'>
+						<Avatar className='h-9 w-9 border shadow-sm'>
+							<AvatarImage
+								src={row.image}
+								alt={row.name}
+								className='object-cover'
+							/>
+							<AvatarFallback className='bg-muted text-xs font-bold text-foreground'>
+								{getInitials(row.name, '')}
+							</AvatarFallback>
+						</Avatar>
+						<div>
+							<p className='font-semibold text-foreground leading-none mb-1 group-hover:text-primary transition-colors'>
+								{row.name}
+							</p>
+							<p className='text-xs text-muted-foreground font-medium truncate max-w-[200px]'>
+								{row.specialty || t('common.notEntered')}
+							</p>
+						</div>
+					</div>
+				),
+			},
+			{
+				header: t('mentors.rating') || 'Reyting',
+				headerClassName: 'text-center whitespace-nowrap',
+				cellClassName: 'text-center',
+				render: row => (
+					<Badge variant='secondary' className='font-medium gap-1 shadow-none'>
+						<Star className='h-3.5 w-3.5 text-amber-500 fill-amber-500' />
+						{row.rating || t('common.new') || 'Yangi'}
+					</Badge>
+				),
+			},
+			{
+				header: t('sidebar.students') || "O'quvchilar",
+				headerClassName: 'text-center whitespace-nowrap',
+				cellClassName: 'text-center',
+				render: row => (
+					<div className='flex items-center justify-center gap-1.5 text-sm font-medium'>
+						<Users className='h-4 w-4 text-muted-foreground' />
+						{row.students || 0}
+					</div>
+				),
+			},
+			{
+				header: t('sidebar.lessons') || 'Darslar',
+				headerClassName: 'text-center whitespace-nowrap',
+				cellClassName: 'text-center',
+				render: row => (
+					<div className='flex items-center justify-center gap-1.5 text-sm font-medium'>
+						<BookOpen className='h-4 w-4 text-muted-foreground' />
+						{row.courses || 0}
+					</div>
+				),
+			},
+			{
+				header: t('common.actions') || 'Harakatlar',
+				headerClassName: 'text-right whitespace-nowrap',
+				cellClassName: 'text-right',
+				render: row => (
+					<Button
+						size='sm'
+						variant='outline'
+						className='gap-1.5 font-medium'
+						onClick={e => {
+							e.stopPropagation()
+							router.push(`/student/mentors/${row.id}`)
+						}}
+					>
+						{t('common.view') || "Ko'rish"} <ChevronRight className='h-4 w-4' />
+					</Button>
+				),
+			},
+		],
+		[router, t],
 	)
 
 	return (
@@ -74,220 +167,62 @@ export default function StudentMentorsPage() {
 			variants={containerVariants}
 			initial='hidden'
 			animate='show'
-			className='max-w-7xl mx-auto space-y-6 pb-12'
+			className='max-w-7xl mx-auto space-y-6 pb-12 pt-6 px-4 sm:px-6'
 		>
-			{/* HEADER */}
-			<motion.div
-				variants={itemVariants}
-				className='flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card p-6 rounded-2xl border shadow-sm'
-			>
-				<div>
-					<h1 className='text-2xl sm:text-3xl font-bold tracking-tight text-foreground'>
-						Mentorlar ro'yxati
-					</h1>
-					<p className='text-muted-foreground text-sm mt-1'>
-						Sohangiz bo'yicha eng tajribali mutaxassislarni toping va bilim
-						oling.
-					</p>
-				</div>
-			</motion.div>
+			{/* 🏷️ HEADER */}
+			<PageHeader
+				title={t('mentors.listTitle') || "Mentorlar ro'yxati"}
+				description={
+					t('mentors.listDesc') ||
+					"Sohangiz bo'yicha eng tajribali mutaxassislarni toping va bilim oling."
+				}
+			/>
 
-			{/* FILTERS & SEARCH */}
-			<motion.div
-				variants={itemVariants}
-				className='flex flex-col sm:flex-row items-center justify-between gap-4'
-			>
-				<div className='relative w-full max-w-md'>
-					<Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
-					<Input
-						placeholder='Mentor ismi yoki mutaxassisligi...'
-						className='pl-9 bg-card border shadow-sm rounded-xl focus-visible:ring-primary'
-						value={searchQuery}
-						onChange={e => setSearchQuery(e.target.value)}
-					/>
-				</div>
-				<Badge
-					variant='outline'
-					className='px-3 py-1.5 w-full sm:w-auto justify-center items-center bg-card text-muted-foreground rounded-xl flex whitespace-nowrap border shadow-sm font-medium'
+			{/* 📊 QISQACHA STATISTIKA */}
+			{!isLoading && (
+				<motion.div
+					variants={itemVariants}
+					className='flex flex-col sm:flex-row items-center justify-between border-b pb-4'
 				>
-					Natija: {filteredMentors.length} ta mentor
-				</Badge>
-			</motion.div>
+					<Badge
+						variant='secondary'
+						className='px-3 py-1.5 text-sm font-medium'
+					>
+						{t('common.all') || 'Jami'}: {mentors.length}{' '}
+						{t('dashboard.mentor').toLowerCase()}
+					</Badge>
+				</motion.div>
+			)}
 
-			{/* MENTORS TABLE */}
-			<motion.div
-				variants={itemVariants}
-				className='bg-card rounded-xl border shadow-sm overflow-hidden'
-			>
-				<div className='overflow-x-auto'>
-					<Table>
-						<TableHeader className='bg-muted/50'>
-							<TableRow className='hover:bg-transparent'>
-								<TableHead className='w-[60px] font-bold'>T/R</TableHead>
-								<TableHead className='font-bold min-w-[250px]'>
-									Mentor
-								</TableHead>
-								<TableHead className='font-bold text-center whitespace-nowrap'>
-									Reyting
-								</TableHead>
-								<TableHead className='font-bold text-center whitespace-nowrap'>
-									O'quvchilar
-								</TableHead>
-								<TableHead className='font-bold text-center whitespace-nowrap'>
-									Darslar
-								</TableHead>
-								<TableHead className='text-right font-bold whitespace-nowrap'>
-									Harakatlar
-								</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{loading ? (
-								Array.from({ length: 5 }).map((_, idx) => (
-									<TableRow key={idx}>
-										<TableCell>
-											<Skeleton className='h-4 w-6' />
-										</TableCell>
-										<TableCell>
-											<div className='flex items-center gap-3'>
-												<Skeleton className='h-10 w-10 rounded-full shrink-0' />
-												<div className='space-y-2'>
-													<Skeleton className='h-4 w-32' />
-													<Skeleton className='h-3 w-24' />
-												</div>
-											</div>
-										</TableCell>
-										<TableCell>
-											<Skeleton className='h-6 w-16 mx-auto rounded-full' />
-										</TableCell>
-										<TableCell>
-											<Skeleton className='h-4 w-12 mx-auto' />
-										</TableCell>
-										<TableCell>
-											<Skeleton className='h-4 w-12 mx-auto' />
-										</TableCell>
-										<TableCell className='text-right'>
-											<Skeleton className='h-9 w-32 ml-auto rounded-lg' />
-										</TableCell>
-									</TableRow>
-								))
-							) : filteredMentors.length > 0 ? (
-								filteredMentors.map((mentor, index) => (
-									<MotionTableRow
-										key={mentor.id}
-										variants={itemVariants}
-										className='hover:bg-muted/30 transition-colors cursor-pointer group'
-										onClick={() => router.push(`/student/mentors/${mentor.id}`)}
-									>
-										<TableCell className='font-medium text-muted-foreground py-4'>
-											{index + 1}
-										</TableCell>
-
-										<TableCell className='py-4'>
-											<div className='flex items-center gap-3'>
-												<Avatar className='h-10 w-10 border border-background shadow-sm'>
-													<AvatarImage
-														src={mentor.image}
-														alt={mentor.name}
-														className='object-cover'
-													/>
-													<AvatarFallback className='bg-primary/10 text-primary font-bold text-xs uppercase'>
-														{mentor.name?.charAt(0) || 'M'}
-													</AvatarFallback>
-												</Avatar>
-												<div>
-													<p className='font-bold text-foreground leading-tight mb-1 group-hover:text-primary transition-colors'>
-														{mentor.name}
-													</p>
-													<p className='text-xs text-muted-foreground font-medium truncate max-w-[200px]'>
-														{mentor.specialty}
-													</p>
-												</div>
-											</div>
-										</TableCell>
-
-										<TableCell className='py-4 text-center'>
-											<Badge
-												variant='secondary'
-												className='bg-amber-500/10 text-amber-600 dark:text-amber-400 border-none font-bold gap-1'
-											>
-												<Star className='h-3.5 w-3.5 fill-current' />{' '}
-												{mentor.rating || 'Yangi'}
-											</Badge>
-										</TableCell>
-
-										<TableCell className='py-4 text-center'>
-											<div className='flex items-center justify-center gap-1.5 font-semibold text-sm'>
-												<Users className='h-4 w-4 text-muted-foreground' />
-												{mentor.students || 0} ta
-											</div>
-										</TableCell>
-
-										<TableCell className='py-4 text-center'>
-											<div className='flex items-center justify-center gap-1.5 font-semibold text-sm'>
-												<BookOpen className='h-4 w-4 text-muted-foreground' />
-												{mentor.courses || 0} ta
-											</div>
-										</TableCell>
-
-										<TableCell className='text-right py-4'>
-											<Button
-												size='sm'
-												variant='secondary'
-												className='bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors rounded-lg gap-1.5 font-semibold shadow-sm'
-												onClick={e => {
-													e.stopPropagation()
-													router.push(`/student/mentors/${mentor.id}`)
-												}}
-											>
-												Profilni ko'rish <ChevronRight className='w-4 h-4' />
-											</Button>
-										</TableCell>
-									</MotionTableRow>
-								))
-							) : (
-								<TableRow>
-									<TableCell
-										colSpan={6}
-										className='h-48 text-center text-muted-foreground'
-									>
-										<div className='flex flex-col items-center justify-center gap-3'>
-											<div className='bg-muted p-4 rounded-full'>
-												<Users className='h-8 w-8 opacity-40' />
-											</div>
-											<p className='font-medium text-foreground'>
-												Mentorlar topilmadi
-											</p>
-											<p className='text-sm max-w-sm mx-auto'>
-												Sizning qidiruvingizga mos keladigan mentorlar hozircha
-												ro'yxatda yo'q.
-											</p>
-										</div>
-									</TableCell>
-								</TableRow>
-							)}
-						</TableBody>
-					</Table>
-				</div>
-
-				{/* FOOTER */}
-				{!loading && filteredMentors.length > 0 && (
-					<div className='p-4 border-t flex items-center justify-between text-sm text-muted-foreground bg-muted/20'>
-						<p>
-							Jami {filteredMentors.length} ta natijadan 1-
-							{filteredMentors.length} tasi ko'rsatilmoqda.
-						</p>
-						<div className='flex gap-2'>
-							<Button variant='outline' size='sm' disabled>
-								Oldingi
-							</Button>
-							<Button variant='outline' size='sm' disabled>
-								Keyingi
-							</Button>
-						</div>
-					</div>
-				)}
+			{/* 🗂️ JADVAL */}
+			<motion.div variants={itemVariants}>
+				<DataTable
+					columns={columns}
+					data={mentors}
+					isLoading={isLoading}
+					searchPlaceholder={
+						t('dashboard.searchMentorPlaceholder') ||
+						'Mentor ismi yoki mutaxassisligi...'
+					}
+					searchKey={row => `${row.name} ${row.specialty}`}
+					onRowClick={row => router.push(`/student/mentors/${row.id}`)}
+					emptyProps={{
+						title: t('common.noResults') || 'Mentorlar topilmadi',
+						description:
+							t('dashboard.noMentorsFound') ||
+							"Sizning qidiruvingizga mos keladigan mentorlar hozircha ro'yxatda yo'q.",
+					}}
+				/>
 			</motion.div>
 		</motion.div>
+	)
+}
+
+// Suspense Layout (Next.js qoidasi)
+export default function StudentMentorsPage() {
+	return (
+		<Suspense fallback={<LoadingSpinner fullScreen />}>
+			<StudentMentorsContent />
+		</Suspense>
 	)
 }

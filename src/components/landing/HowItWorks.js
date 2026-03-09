@@ -1,93 +1,93 @@
 'use client'
 
+import { useTranslation } from '@/lib/i18n'
 import { motion } from 'framer-motion'
-import { CheckCircle2 } from 'lucide-react'
-
-const STEPS = [
-	"O'zingizga kerakli fan yoki texnologiyani qidirasiz.",
-	'Shu sohada tajribasi bor tengdoshingizni (mentor) tanlaysiz.',
-	"Qulay vaqtni belgilab, platforma ichida jonli darsga qo'shilasiz.",
-	'Bilimingizni oshirasiz va mentorni baholaysiz.',
-]
 
 export default function HowItWorks() {
+	const { t } = useTranslation()
+
+	// Tarjimalar topilmagan holat uchun fallback (zaxira) matnlar
+	const STEPS = [
+		t('howItWorks.step1') || "Ro'yxatdan o'ting va profilingizni to'ldiring",
+		t('howItWorks.step2') || "O'zingizga mos mentor yoki o'quvchini toping",
+		t('howItWorks.step3') || 'Dars vaqtini belgilang va ulaning',
+		t('howItWorks.step4') || 'Bilim oling va reytingingizni oshiring',
+	]
+
 	const containerVariants = {
 		hidden: { opacity: 0 },
 		show: {
 			opacity: 1,
-			transition: {
-				staggerChildren: 0.2,
-			},
+			transition: { staggerChildren: 0.1 },
 		},
 	}
 
 	const itemVariants = {
-		hidden: { opacity: 0, x: -20 },
+		hidden: { opacity: 0, y: 20 },
 		show: {
 			opacity: 1,
-			x: 0,
+			y: 0,
 			transition: { type: 'spring', stiffness: 300, damping: 24 },
 		},
 	}
 
 	return (
-		<section className='w-full py-16 md:py-24 bg-muted/30 relative overflow-hidden'>
-			<div className='container mx-auto px-4 md:px-8 max-w-4xl relative z-10'>
-				<motion.h2
-					initial={{ opacity: 0, y: -20 }}
-					whileInView={{ opacity: 1, y: 0 }}
-					viewport={{ once: true, amount: 0.5 }}
-					transition={{ duration: 0.5 }}
-					className='text-3xl md:text-4xl font-bold text-center mb-10 text-balance'
-				>
-					Tengdosh ustoz qanday ishlaydi?
-				</motion.h2>
+		<section className='w-full py-20 md:py-32 bg-background border-t'>
+			<div className='container mx-auto px-4 md:px-8 max-w-5xl'>
+				{/* 🏷️ Sarlavha */}
+				<div className='text-center mb-16 space-y-4'>
+					<motion.h2
+						initial={{ opacity: 0, y: -20 }}
+						whileInView={{ opacity: 1, y: 0 }}
+						viewport={{ once: true }}
+						transition={{ duration: 0.5 }}
+						className='text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight text-foreground'
+					>
+						{t('howItWorks.title') || 'Platforma qanday ishlaydi?'}
+					</motion.h2>
+					<motion.p
+						initial={{ opacity: 0, y: 20 }}
+						whileInView={{ opacity: 1, y: 0 }}
+						viewport={{ once: true }}
+						transition={{ duration: 0.5, delay: 0.1 }}
+						className='text-muted-foreground text-base sm:text-lg md:text-xl max-w-2xl mx-auto leading-relaxed text-balance'
+					>
+						{t('howItWorks.intro') ||
+							"TengdoshUstoz orqali bilim ulashish va o'rganish juda oson. Barchasi 4 ta oddiy qadamda amalga oshadi."}
+					</motion.p>
+				</div>
 
+				{/* 👣 Qadamlar */}
 				<motion.div
-					initial={{ opacity: 0, y: 30 }}
-					whileInView={{ opacity: 1, y: 0 }}
-					viewport={{ once: true, margin: '-100px' }}
-					transition={{ duration: 0.6, ease: 'easeOut' }}
-					className='relative bg-background border rounded-3xl p-6 md:p-10 shadow-sm hover:shadow-xl transition-shadow duration-500'
+					variants={containerVariants}
+					initial='hidden'
+					whileInView='show'
+					viewport={{ once: true, margin: '-50px' }}
+					className='grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-6'
 				>
-					<div className='absolute -inset-0.5 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-3xl blur opacity-30 pointer-events-none'></div>
-
-					<div className='relative'>
-						<p className='text-muted-foreground text-lg md:text-xl mb-10 leading-relaxed text-center sm:text-left text-balance'>
-							Bu platforma an'anaviy ta'limdan farq qiladi. Bu yerda hamma
-							o'quvchi va hamma ustoz bo'lishi mumkin. Siz tushunmagan mavzuni
-							kechagina shu mavzuni o'zlashtirgan kursdoshingiz eng oddiy,
-							<span className='text-foreground font-semibold'>
-								{' '}
-								"talabacha"{' '}
-							</span>{' '}
-							tilda tushuntirib beradi.
-						</p>
-
+					{STEPS.map((step, idx) => (
 						<motion.div
-							variants={containerVariants}
-							initial='hidden'
-							whileInView='show'
-							viewport={{ once: true, margin: '-50px' }}
-							className='grid sm:grid-cols-2 gap-6'
+							key={idx}
+							variants={itemVariants}
+							className='flex flex-col sm:flex-row items-start gap-4 p-6 sm:p-8 rounded-xl border bg-card shadow-sm hover:shadow-md hover:border-primary/30 transition-all group'
 						>
-							{STEPS.map((step, idx) => (
-								<motion.div
-									key={idx}
-									variants={itemVariants}
-									className='flex items-start space-x-4 p-4 rounded-2xl transition-colors hover:bg-muted/50 group'
-								>
-									<div className='relative flex-shrink-0 mt-0.5'>
-										<CheckCircle2 className='h-7 w-7 text-primary transition-transform duration-300 group-hover:scale-110' />
-										<div className='absolute inset-0 bg-primary/20 blur-md rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300'></div>
-									</div>
-									<span className='text-foreground font-medium leading-snug'>
-										{step}
-									</span>
-								</motion.div>
-							))}
+							{/* Raqamli indikator */}
+							<div className='flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-lg group-hover:bg-primary group-hover:text-primary-foreground transition-colors duration-300'>
+								{idx + 1}
+							</div>
+
+							{/* Matn qismi */}
+							<div className='space-y-1.5 mt-1 sm:mt-0.5'>
+								<span className='text-xs font-bold uppercase tracking-wider text-muted-foreground'>
+									{t('howItWorks.step', { number: idx + 1 }) ||
+										`${idx + 1}-qadam`}
+								</span>
+								<p className='text-foreground font-semibold text-base sm:text-lg leading-snug'>
+									{step}
+								</p>
+							</div>
 						</motion.div>
-					</div>
+					))}
 				</motion.div>
 			</div>
 		</section>

@@ -6,8 +6,10 @@ export const metadata = {
 
 export default function MentorResumeLayout({ children }) {
 	return (
-		<div className='min-h-screen bg-muted/20 flex flex-col items-center justify-center p-4 md:p-8'>
-			<Suspense fallback={<div>Yuklanmoqda...</div>}>{children}</Suspense>
+		<div className='min-h-screen bg-muted/30 flex flex-col items-center justify-center p-4 md:p-8'>
+			<Suspense fallback={<div className='animate-pulse'>Yuklanmoqda...</div>}>
+				{children}
+			</Suspense>
 		</div>
 	)
 }

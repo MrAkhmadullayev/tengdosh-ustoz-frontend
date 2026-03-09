@@ -5,6 +5,7 @@ import { Calendar } from '@/components/ui/calendar'
 import {
 	Card,
 	CardContent,
+	CardDescription,
 	CardFooter,
 	CardHeader,
 	CardTitle,
@@ -23,29 +24,40 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import api from '@/lib/api'
-import { cn } from '@/lib/utils'
+// 🔥 Markazlashgan utilitalar va xato formatterlar
+import { cn, getErrorMessage } from '@/lib/utils'
 import { format } from 'date-fns'
 import { uz } from 'date-fns/locale'
 import {
 	ArrowLeft,
+	BookOpen,
 	Calendar as CalendarIcon,
 	Clock,
 	Loader2,
+	MapPin,
 	MessagesSquare,
 	Save,
+	Users,
 	Video,
 } from 'lucide-react'
+import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { toast } from 'sonner' // 🔥 Toast import qilindi
 
+// ==========================================
+// 🚀 ASOSIY KOMPONENT
+// ==========================================
 export default function EditMentorLessonPage() {
-	const params = useParams()
-	const { id } = params
+	const { id } = useParams()
 	const router = useRouter()
+
 	const [isLoading, setIsLoading] = useState(false)
+	const [isDataLoading, setIsDataLoading] = useState(true)
 
 	const [formData, setFormData] = useState({
 		title: '',
@@ -59,65 +71,133 @@ export default function EditMentorLessonPage() {
 		status: 'upcoming',
 	})
 
-	useEffect(() => {
-		const fetchLesson = async () => {
-			try {
-				const res = await api.get(`/mentor/lessons/${id}`)
-				if (res.data.success) {
-					const l = res.data.lesson
-					setFormData({
-						title: l.title || '',
-						date: l.date ? new Date(l.date).toISOString().split('T')[0] : '',
-						time: l.time || '',
-						format: l.format || 'online',
-						description: l.description || '',
-						roomNumber: l.roomNumber || '',
-						maxStudents: l.maxStudents?.toString() || '100',
-						allowComments: l.allowComments ?? true,
-						status: l.status || 'upcoming',
-					})
-				}
-			} catch (error) {
-				console.error("Ma'lumotlarni yuklashda xatolik:", error)
+	// 1. API dan ma'lumotlarni yuklash
+	const fetchLesson = useCallback(async () => {
+		try {
+			setIsDataLoading(true)
+			const res = await api.get(`/mentor/lessons/${id}`)
+			if (res?.data?.success) {
+				const l = res.data.lesson
+				setFormData({
+					title: l.title || '',
+					date: l.date ? new Date(l.date).toISOString().split('T')[0] : '',
+					time: l.time || '',
+					format: l.format || 'online',
+					description: l.description || '',
+					roomNumber: l.roomNumber || '',
+					maxStudents: l.maxStudents?.toString() || '100',
+					allowComments: l.allowComments ?? true,
+					status: l.status || 'upcoming',
+				})
 			}
+		} catch (error) {
+			toast.error(
+				getErrorMessage(
+					error,
+					"Dars ma'lumotlarini yuklashda xatolik yuz berdi.",
+				),
+			)
+		} finally {
+			setIsDataLoading(false)
 		}
-		if (id) fetchLesson()
 	}, [id])
 
-	const handleSave = async () => {
+	useEffect(() => {
+		if (id) fetchLesson()
+	}, [fetchLesson, id])
+
+	// 2. Inputlarni boshqarish (Optimallashtirilgan)
+	const handleChange = useCallback((field, value) => {
+		setFormData(prev => ({ ...prev, [field]: value }))
+	}, [])
+
+	const handleTimeChange = useCallback((type, value) => {
+		setFormData(prev => {
+			const currentHours = prev.time?.split(':')[0] || '15'
+			const currentMinutes = prev.time?.split(':')[1] || '00'
+			return {
+				...prev,
+				time:
+					type === 'hour'
+						? `${value}:${currentMinutes}`
+						: `${currentHours}:${value}`,
+			}
+		})
+	}, [])
+
+	// 3. O'zgarishlarni Saqlash
+	const handleSave = async e => {
+		e.preventDefault()
+
 		if (!formData.title || !formData.date || !formData.time) {
-			return alert('Iltimos, dars mavzusi, sanasi va vaqtini kiriting')
+			toast.warning('Iltimos, dars mavzusi, sanasi va vaqtini kiriting.')
+			return
+		}
+
+		if (
+			(formData.format === 'offline' || formData.format === 'hybrid') &&
+			!formData.roomNumber
+		) {
+			toast.warning('Offline darslar uchun xona raqamini kiritish shart.')
+			return
 		}
 
 		setIsLoading(true)
 		try {
-			const res = await api.put(`/mentor/lessons/${id}`, formData)
-			if (res.data.success) {
-				alert(res.data.message)
+			// Backend Number qabul qiladi
+			const payload = {
+				...formData,
+				maxStudents: Number(formData.maxStudents) || 100,
+			}
+
+			const res = await api.put(`/mentor/lessons/${id}`, payload)
+
+			if (res?.data?.success) {
+				toast.success("O'zgarishlar muvaffaqiyatli saqlandi!")
 				router.push('/mentor/lessons')
+				router.refresh()
 			}
 		} catch (error) {
-			console.error(error)
-			alert(error.response?.data?.message || 'Xatolik yuz berdi')
+			toast.error(getErrorMessage(error, 'Darsni saqlashda xatolik yuz berdi.'))
 		} finally {
 			setIsLoading(false)
 		}
 	}
 
+	// 4. UI: Loading Skeleton
+	if (isDataLoading) {
+		return (
+			<div className='max-w-5xl mx-auto space-y-6 pt-6 pb-20 px-4 sm:px-6 animate-pulse'>
+				<div className='flex items-center gap-4 border-b pb-4'>
+					<Skeleton className='h-10 w-10 rounded-full' />
+					<div className='space-y-2'>
+						<Skeleton className='h-8 w-64' />
+						<Skeleton className='h-4 w-32' />
+					</div>
+				</div>
+				<div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
+					<div className='lg:col-span-2 space-y-6'>
+						<Skeleton className='h-[400px] w-full rounded-xl' />
+						<Skeleton className='h-[250px] w-full rounded-xl' />
+					</div>
+					<Skeleton className='h-[500px] w-full rounded-xl' />
+				</div>
+			</div>
+		)
+	}
+
+	// 5. UI: Asosiy Forma
 	return (
-		<div className='max-w-4xl mx-auto space-y-6 pb-12 w-full'>
-			{/* HEADER */}
-			<div className='flex items-center gap-4'>
-				<Button
-					variant='ghost'
-					size='icon'
-					onClick={() => router.push('/mentor/lessons')}
-					className='rounded-full hover:bg-muted'
-				>
-					<ArrowLeft className='h-5 w-5' />
+		<div className='max-w-5xl mx-auto space-y-6 pb-12 pt-6 px-4 sm:px-6 w-full'>
+			{/* 🏷️ HEADER */}
+			<div className='flex items-center gap-4 border-b pb-6'>
+				<Button variant='outline' size='icon' className='shrink-0' asChild>
+					<Link href='/mentor/lessons'>
+						<ArrowLeft className='h-4 w-4' />
+					</Link>
 				</Button>
 				<div>
-					<h1 className='text-3xl font-bold tracking-tight'>
+					<h1 className='text-2xl font-bold tracking-tight'>
 						Darsni Tahrirlash
 					</h1>
 					<p className='text-muted-foreground text-sm mt-1'>
@@ -126,134 +206,179 @@ export default function EditMentorLessonPage() {
 				</div>
 			</div>
 
-			<div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
-				{/* ASOSIY FORMA */}
-				<div className='md:col-span-2 space-y-6'>
-					<Card className='shadow-sm border-muted overflow-hidden'>
-						<CardHeader className='bg-muted/30 border-b pb-5'>
-							<CardTitle className='text-lg'>Asosiy ma'lumotlar</CardTitle>
+			<form
+				onSubmit={handleSave}
+				className='grid grid-cols-1 lg:grid-cols-3 gap-6 items-start'
+			>
+				{/* ========================================== */}
+				{/* ASOSIY FORMA (Chap qism) */}
+				{/* ========================================== */}
+				<div className='lg:col-span-2 space-y-6'>
+					<Card>
+						<CardHeader>
+							<div className='flex items-center gap-2'>
+								<BookOpen className='w-5 h-5 text-muted-foreground' />
+								<CardTitle className='text-lg'>Asosiy ma'lumotlar</CardTitle>
+							</div>
+							<CardDescription>
+								O'quvchilarga ko'rinadigan darsning nomi va tavsifi.
+							</CardDescription>
 						</CardHeader>
-						<CardContent className='p-6 space-y-6'>
-							<div className='space-y-4'>
+						<CardContent className='space-y-4'>
+							<div className='space-y-2'>
+								<Label htmlFor='title'>
+									Dars mavzusi <span className='text-destructive'>*</span>
+								</Label>
+								<Input
+									id='title'
+									placeholder="Masalan: JavaScript dagi closure'lar"
+									value={formData.title}
+									onChange={e => handleChange('title', e.target.value)}
+								/>
+							</div>
+
+							<div className='space-y-2'>
+								<Label htmlFor='description'>Batafsil ma'lumot</Label>
+								<Textarea
+									id='description'
+									placeholder='Dars haqida qisqacha...'
+									className='min-h-[120px] resize-y'
+									value={formData.description}
+									onChange={e => handleChange('description', e.target.value)}
+								/>
+							</div>
+
+							<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
 								<div className='space-y-2'>
-									<Label>
-										Dars mavzusi <span className='text-red-500'>*</span>
+									<Label className='flex items-center gap-1.5'>
+										<Users className='w-4 h-4 text-muted-foreground' /> Limit
+										(O'quvchilar soni)
 									</Label>
 									<Input
-										placeholder="Masalan: JavaScript dagi closure'lar"
-										value={formData.title}
-										onChange={e =>
-											setFormData({ ...formData, title: e.target.value })
-										}
-										className='bg-background focus-visible:ring-primary/20'
+										type='number'
+										placeholder='Masalan: 100'
+										value={formData.maxStudents}
+										onChange={e => handleChange('maxStudents', e.target.value)}
+										min='1'
 									/>
-								</div>
-
-								<div className='space-y-2'>
-									<Label>Dars haqida batafsil ma'lumot</Label>
-									<Textarea
-										placeholder="Bu dars nima haqida bo'ladi va nimalar o'rganiladi?"
-										className='min-h-[120px] bg-background resize-none focus-visible:ring-primary/20'
-										value={formData.description}
-										onChange={e =>
-											setFormData({ ...formData, description: e.target.value })
-										}
-									/>
-								</div>
-
-								<div className='grid grid-cols-1 gap-4'>
-									<div className='space-y-2'>
-										<Label>Maksimal o'quvchilar soni (Limit)</Label>
-										<Input
-											type='number'
-											placeholder='Odatiy: 100'
-											value={formData.maxStudents}
-											onChange={e =>
-												setFormData({
-													...formData,
-													maxStudents: e.target.value,
-												})
-											}
-											className='bg-background max-w-xs'
-										/>
-									</div>
 								</div>
 							</div>
 						</CardContent>
 					</Card>
 
-					<Card className='shadow-sm border-muted overflow-hidden'>
-						<CardHeader className='bg-muted/30 border-b pb-5'>
-							<CardTitle className='text-lg flex items-center gap-2'>
-								<Video className='w-5 h-5 text-blue-500' /> Translatsiya va
-								Manzil sozlamalari
-							</CardTitle>
+					<Card>
+						<CardHeader>
+							<div className='flex items-center gap-2'>
+								<Video className='w-5 h-5 text-muted-foreground' />
+								<CardTitle className='text-lg'>
+									Translatsiya va Manzil
+								</CardTitle>
+							</div>
 						</CardHeader>
-						<CardContent className='p-6 space-y-6'>
+						<CardContent className='space-y-4'>
 							<div className='space-y-2'>
-								<Label>Dars qay formatda o'tiladi?</Label>
+								<Label>Dars formati</Label>
 								<Select
 									value={formData.format}
-									onValueChange={v => setFormData({ ...formData, format: v })}
+									onValueChange={v => handleChange('format', v)}
 								>
-									<SelectTrigger className='bg-background max-w-xs'>
+									<SelectTrigger className='sm:max-w-xs'>
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>
 										<SelectItem value='online'>
-											Online (Platformada / Zoom)
+											🌐 Online (Platformada)
 										</SelectItem>
-										<SelectItem value='offline'>Offline (Markazda)</SelectItem>
+										<SelectItem value='offline'>
+											🏢 Offline (Markazda)
+										</SelectItem>
 										<SelectItem value='hybrid'>
-											Online ham, Offline ham (Gibrid)
+											🔄 Gibrid (Ikkalasi ham)
 										</SelectItem>
 									</SelectContent>
 								</Select>
 							</div>
 
-							<div className='grid grid-cols-1 gap-6'>
-								{(formData.format === 'offline' ||
-									formData.format === 'hybrid') && (
-									<div className='space-y-2'>
-										<Label>
-											Xona raqami / Nomi <span className='text-red-500'>*</span>
-										</Label>
-										<Input
-											placeholder='Masalan: 401-xona, Google xonasi'
-											value={formData.roomNumber}
-											onChange={e =>
-												setFormData({ ...formData, roomNumber: e.target.value })
-											}
-											className='bg-background'
-										/>
-									</div>
-								)}
-							</div>
+							{(formData.format === 'offline' ||
+								formData.format === 'hybrid') && (
+								<div className='space-y-2 pt-2'>
+									<Label className='flex items-center gap-1.5'>
+										<MapPin className='w-4 h-4 text-muted-foreground' /> Xona
+										nomi/raqami <span className='text-destructive'>*</span>
+									</Label>
+									<Input
+										placeholder='Masalan: 401-xona'
+										value={formData.roomNumber}
+										onChange={e => handleChange('roomNumber', e.target.value)}
+										className='sm:max-w-xs'
+									/>
+								</div>
+							)}
 						</CardContent>
 					</Card>
 				</div>
 
-				{/* YON PANEL (VAQT VA SANA) */}
-				<div className='space-y-6'>
-					<Card className='shadow-sm border-muted overflow-hidden'>
-						<CardHeader className='bg-muted/30 border-b p-4'>
-							<CardTitle className='text-base'>Vaqt va Format</CardTitle>
+				{/* ========================================== */}
+				{/* YON PANEL (Vaqt va Sana) */}
+				{/* ========================================== */}
+				<div className='space-y-6 lg:sticky lg:top-24'>
+					<Card>
+						<CardHeader>
+							<div className='flex items-center gap-2'>
+								<Clock className='w-4 h-4 text-muted-foreground' />
+								<CardTitle className='text-base'>Holat va Vaqt</CardTitle>
+							</div>
 						</CardHeader>
-						<CardContent className='p-4 space-y-5 flex flex-col'>
+						<CardContent className='space-y-4'>
+							{/* Dars Holati */}
+							<div className='space-y-2'>
+								<Label>Dars Holati</Label>
+								<Select
+									value={formData.status}
+									onValueChange={v => handleChange('status', v)}
+								>
+									<SelectTrigger>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem
+											value='upcoming'
+											className='font-medium text-primary'
+										>
+											Keladigan
+										</SelectItem>
+										<SelectItem
+											value='live'
+											className='font-bold text-destructive'
+										>
+											Jonli (Live)
+										</SelectItem>
+										<SelectItem
+											value='completed'
+											className='font-medium text-green-600 dark:text-green-500'
+										>
+											Tugallangan
+										</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+
+							{/* Sana Popover */}
 							<div className='space-y-2 flex flex-col'>
 								<Label className='flex items-center gap-2'>
 									<CalendarIcon className='w-4 h-4 text-muted-foreground' />{' '}
-									Sana <span className='text-red-500'>*</span>
+									Sana <span className='text-destructive'>*</span>
 								</Label>
 								<Popover>
 									<PopoverTrigger asChild>
 										<Button
-											variant={'outline'}
+											variant='outline'
 											className={cn(
-												'w-full justify-start text-left font-normal bg-background',
+												'w-full justify-start text-left font-normal',
 												!formData.date && 'text-muted-foreground',
 											)}
 										>
+											<CalendarIcon className='mr-2 h-4 w-4' />
 											{formData.date ? (
 												format(new Date(formData.date), 'PPP', { locale: uz })
 											) : (
@@ -261,17 +386,14 @@ export default function EditMentorLessonPage() {
 											)}
 										</Button>
 									</PopoverTrigger>
-									<PopoverContent className='w-auto p-0' align='start'>
+									<PopoverContent className='w-auto p-0' align='center'>
 										<Calendar
 											mode='single'
 											selected={
 												formData.date ? new Date(formData.date) : undefined
 											}
 											onSelect={d =>
-												setFormData({
-													...formData,
-													date: d ? format(d, 'yyyy-MM-dd') : '',
-												})
+												handleChange('date', d ? format(d, 'yyyy-MM-dd') : '')
 											}
 											initialFocus
 										/>
@@ -279,45 +401,37 @@ export default function EditMentorLessonPage() {
 								</Popover>
 							</div>
 
+							{/* Vaqt (Soat:Daqiqa) */}
 							<div className='space-y-2'>
 								<Label className='flex items-center gap-2'>
 									<Clock className='w-4 h-4 text-muted-foreground' /> Soat{' '}
-									<span className='text-red-500'>*</span>
+									<span className='text-destructive'>*</span>
 								</Label>
-								<div className='grid grid-cols-2 gap-2'>
+								<div className='grid grid-cols-2 gap-3'>
 									<Select
 										value={formData.time?.split(':')[0] || ''}
-										onValueChange={h =>
-											setFormData({
-												...formData,
-												time: `${h}:${formData.time?.split(':')[1] || '00'}`,
-											})
-										}
+										onValueChange={v => handleTimeChange('hour', v)}
 									>
-										<SelectTrigger className='bg-background'>
+										<SelectTrigger>
 											<SelectValue placeholder='Soat' />
 										</SelectTrigger>
-										<SelectContent>
+										<SelectContent className='max-h-[200px]'>
 											{Array.from({ length: 24 }).map((_, i) => {
 												const hour = i.toString().padStart(2, '0')
 												return (
 													<SelectItem key={hour} value={hour}>
-														{hour}
+														{hour}:00
 													</SelectItem>
 												)
 											})}
 										</SelectContent>
 									</Select>
+
 									<Select
 										value={formData.time?.split(':')[1] || ''}
-										onValueChange={m =>
-											setFormData({
-												...formData,
-												time: `${formData.time?.split(':')[0] || '15'}:${m}`,
-											})
-										}
+										onValueChange={v => handleTimeChange('minute', v)}
 									>
-										<SelectTrigger className='bg-background'>
+										<SelectTrigger>
 											<SelectValue placeholder='Daqiqa' />
 										</SelectTrigger>
 										<SelectContent>
@@ -344,35 +458,34 @@ export default function EditMentorLessonPage() {
 								</div>
 							</div>
 
-							<div className='border-t border-border/50 my-2' />
+							<div className='border-t my-4' />
 
+							{/* Izohlar Switch */}
 							<div className='flex items-center justify-between gap-4'>
-								<div className='space-y-0.5'>
+								<div className='space-y-1'>
 									<Label
-										className='text-sm flex items-center gap-1.5 cursor-pointer'
 										htmlFor='comments-toggle'
+										className='flex items-center gap-1.5 cursor-pointer font-medium'
 									>
 										<MessagesSquare className='w-4 h-4 text-muted-foreground' />{' '}
-										Izohlar (Sharhlar)
+										Izohlar
 									</Label>
-									<p className='text-[12px] text-muted-foreground leading-tight'>
-										O'quvchilarga muhokama uchun ruxsat
+									<p className='text-xs text-muted-foreground'>
+										O'quvchilarga chat ruxsati
 									</p>
 								</div>
 								<Switch
 									id='comments-toggle'
 									checked={formData.allowComments}
-									onCheckedChange={c =>
-										setFormData({ ...formData, allowComments: c })
-									}
+									onCheckedChange={c => handleChange('allowComments', c)}
 								/>
 							</div>
 						</CardContent>
-						<CardFooter className='p-4 pt-0'>
+
+						<CardFooter>
 							<Button
-								className='w-full gap-2 font-medium'
-								size='lg'
-								onClick={handleSave}
+								type='submit'
+								className='w-full font-semibold'
 								disabled={
 									isLoading ||
 									!formData.title ||
@@ -381,16 +494,16 @@ export default function EditMentorLessonPage() {
 								}
 							>
 								{isLoading ? (
-									<Loader2 className='h-4 w-4 animate-spin' />
+									<Loader2 className='mr-2 h-4 w-4 animate-spin' />
 								) : (
-									<Save className='h-4 w-4' />
+									<Save className='mr-2 h-4 w-4' />
 								)}
 								O'zgarishlarni Saqlash
 							</Button>
 						</CardFooter>
 					</Card>
 				</div>
-			</div>
+			</form>
 		</div>
 	)
 }

@@ -1,11 +1,13 @@
 import LandingPage from '@/components/landing/LandingPage'
+import { Loader2 } from 'lucide-react'
 import { Suspense } from 'react'
 
+// ISR: Sahifa har 1 soatda (3600 soniya) qayta generatsiya qilinadi
 export const revalidate = 3600
 
 export default function Home() {
 	return (
-		<main className='min-h-screen bg-background text-foreground flex flex-col'>
+		<main className='flex min-h-screen flex-col bg-background text-foreground'>
 			<Suspense fallback={<LandingSkeleton />}>
 				<LandingPage />
 			</Suspense>
@@ -13,11 +15,12 @@ export default function Home() {
 	)
 }
 
+// Toza va minimalist yuklanish (Loading) ekrani
 function LandingSkeleton() {
 	return (
-		<div className='flex-1 flex flex-col items-center justify-center min-h-screen space-y-4'>
-			<div className='w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin'></div>
-			<p className='text-muted-foreground text-sm font-medium animate-pulse'>
+		<div className='flex flex-1 flex-col items-center justify-center min-h-screen space-y-4'>
+			<Loader2 className='h-8 w-8 animate-spin text-primary/60' />
+			<p className='text-sm font-medium text-muted-foreground animate-pulse'>
 				Sahifa yuklanmoqda...
 			</p>
 		</div>

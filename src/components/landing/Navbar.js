@@ -9,9 +9,12 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import api from '@/lib/api'
+import { useAuth } from '@/lib/auth-context'
+import { useTranslation } from '@/lib/i18n'
+import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import {
+	Check,
 	Globe,
 	HelpCircle,
 	Home,
@@ -27,86 +30,60 @@ import { useTheme } from 'next-themes'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
 
-const NAV_LINKS = [
-	{ name: 'Bosh sahifa', href: '/', icon: <Home className='w-5 h-5 mb-1' /> },
-	{
-		name: 'Mentorlar',
-		href: '/home/mentors',
-		icon: <Users className='w-5 h-5 mb-1' />,
-	},
-	{
-		name: 'Jonli darslar',
-		href: '/home/live-lessons',
-		icon: <MonitorPlay className='w-5 h-5 mb-1' />,
-	},
-	{
-		name: 'FAQ',
-		href: '/home/faq',
-		icon: <HelpCircle className='w-5 h-5 mb-1' />,
-	},
-]
+const LOCALE_LABELS = {
+	uz: "O'zbekcha",
+	ru: 'Русский',
+	en: 'English',
+}
 
 export default function Navbar() {
 	const { setTheme, theme } = useTheme()
 	const router = useRouter()
 	const pathname = usePathname()
+	const { isAuthenticated, role, isLoading, logout } = useAuth()
+	const { t, locale, setLocale, supportedLocales } = useTranslation()
 
-	const [isAuthenticated, setIsAuthenticated] = useState(false)
-	const [userRole, setUserRole] = useState(null)
-	const [isLoading, setIsLoading] = useState(true)
-
-	useEffect(() => {
-		const controller = new AbortController()
-
-		const checkAuth = async () => {
-			try {
-				const { data } = await api.get('/auth/me', {
-					signal: controller.signal,
-				})
-				if (data.success) {
-					setIsAuthenticated(true)
-					setUserRole(data.user.role)
-				}
-			} catch (err) {
-				if (err.name !== 'CanceledError') {
-					setIsAuthenticated(false)
-				}
-			} finally {
-				setIsLoading(false)
-			}
-		}
-		checkAuth()
-
-		return () => controller.abort()
-	}, [])
+	const NAV_LINKS = [
+		{ name: t('nav.home') || 'Asosiy', href: '/', icon: Home },
+		{
+			name: t('nav.mentors') || 'Mentorlar',
+			href: '/home/mentors',
+			icon: Users,
+		},
+		{
+			name: t('nav.liveLessons') || 'Jonli darslar',
+			href: '/home/live-lessons',
+			icon: MonitorPlay,
+		},
+		{
+			name: t('nav.faq') || "Ko'p so'raladigan savollar",
+			href: '/home/faq',
+			icon: HelpCircle,
+		},
+	]
 
 	const handleLogout = async () => {
-		try {
-			await api.post('/auth/logout')
-			setIsAuthenticated(false)
-			setUserRole(null)
-			router.push('/authentication')
-		} catch (err) {
-			console.error('Logout xatosi', err)
-		}
+		await logout()
+		router.push('/authentication')
 	}
 
 	return (
 		<>
-			<header className='sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 shadow-sm transition-colors duration-300'>
-				<div className='container flex h-16 items-center justify-between mx-auto px-4 md:px-8'>
-					<div className='flex flex-1 items-center justify-start gap-4'>
+			{/* 🖥️ DESKTOP NAVBAR */}
+			<header className='sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 shadow-sm'>
+				<div className='container flex h-16 max-w-7xl items-center justify-between mx-auto px-4 md:px-8'>
+					{/* Chap taraf: Logo */}
+					<div className='flex items-center gap-4'>
 						<Link href='/' className='flex items-center space-x-2 group'>
-							<div className='flex items-center justify-center rounded-lg bg-transparent transition-transform duration-300 group-hover:scale-105'>
+							<div className='flex items-center justify-center transition-transform duration-300 group-hover:scale-105'>
 								<Image
 									src='/logo.png'
 									alt='Tengdosh Logo'
-									width={40}
-									height={40}
+									width={36}
+									height={36}
 									priority
-									className='dark:invert mix-blend-multiply dark:mix-blend-screen opacity-90'
+									className='dark:invert opacity-90'
 								/>
 							</div>
 							<span className='font-bold text-xl tracking-tight hidden sm:inline-block'>
@@ -115,7 +92,8 @@ export default function Navbar() {
 						</Link>
 					</div>
 
-					<nav className='hidden md:flex items-center justify-center space-x-2 text-sm font-medium'>
+					{/* O'rta: Navigatsiya (Desktop) */}
+					<nav className='hidden md:flex items-center justify-center space-x-1 text-sm font-medium'>
 						{NAV_LINKS.map(link => {
 							const isActive =
 								pathname === link.href ||
@@ -124,11 +102,12 @@ export default function Navbar() {
 								<Link
 									key={link.href}
 									href={link.href}
-									className={`relative px-4 py-2 rounded-full text-sm font-medium transition-colors duration-300 z-10 ${
+									className={cn(
+										'relative px-4 py-2 text-sm font-medium transition-colors z-10 rounded-full',
 										isActive
 											? 'text-primary-foreground'
-											: 'text-muted-foreground hover:text-foreground'
-									}`}
+											: 'text-muted-foreground hover:text-foreground',
+									)}
 								>
 									{isActive && (
 										<motion.div
@@ -147,22 +126,23 @@ export default function Navbar() {
 						})}
 					</nav>
 
-					<div className='flex flex-1 items-center justify-end space-x-2 sm:space-x-3'>
+					{/* O'ng taraf: Harakatlar */}
+					<div className='flex items-center justify-end space-x-2 sm:space-x-3'>
 						<div className='flex items-center justify-end min-w-[80px] sm:min-w-[140px]'>
 							{isLoading ? (
-								<div className='h-9 w-20 animate-pulse bg-muted/60 rounded-md shrink-0'></div>
+								<div className='h-9 w-20 animate-pulse bg-muted rounded-md shrink-0' />
 							) : isAuthenticated ? (
 								<motion.div
 									initial={{ opacity: 0 }}
 									animate={{ opacity: 1 }}
 									className='flex items-center gap-2'
 								>
-									<Link href={`/${userRole}/dashboard`}>
+									<Link href={`/${role}/dashboard`}>
 										<Button
-											variant='ghost'
+											variant='secondary'
 											size='icon'
-											className='rounded-full bg-secondary hover:bg-secondary/80 transition-colors'
-											title="Profilga o'tish"
+											className='rounded-full shadow-sm'
+											title={t('nav.profile')}
 										>
 											<User className='h-5 w-5' />
 										</Button>
@@ -171,9 +151,9 @@ export default function Navbar() {
 										variant='destructive'
 										size='sm'
 										onClick={handleLogout}
-										className='hidden sm:flex transition-transform active:scale-95 shrink-0'
+										className='hidden sm:flex shrink-0 shadow-sm font-semibold'
 									>
-										Chiqish
+										{t('nav.logout') || 'Chiqish'}
 									</Button>
 								</motion.div>
 							) : (
@@ -181,57 +161,78 @@ export default function Navbar() {
 									<Link href='/authentication'>
 										<Button
 											size='sm'
-											className='sm:px-4 transition-transform active:scale-95 shrink-0'
+											className='sm:px-5 font-semibold shadow-sm shrink-0'
 										>
-											Kirish
+											{t('nav.login') || 'Kirish'}
 										</Button>
 									</Link>
 								</motion.div>
 							)}
 						</div>
 
+						{/* Sozlamalar (Tillar va Mavzu) */}
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>
 								<Button
 									variant='outline'
 									size='icon'
-									className='h-9 w-9 sm:h-10 sm:w-10 transition-transform hover:scale-105 active:scale-95 shrink-0'
+									className='shrink-0 h-9 w-9 sm:h-10 sm:w-10'
 								>
 									<Settings className='h-4 w-4 sm:h-5 sm:w-5' />
 								</Button>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent
 								align='end'
-								className='w-56 shadow-xl rounded-xl'
+								className='w-56 shadow-md rounded-xl'
 							>
-								<DropdownMenuLabel>Sozlamalar</DropdownMenuLabel>
+								<DropdownMenuLabel className='font-semibold'>
+									{t('nav.settings') || 'Sozlamalar'}
+								</DropdownMenuLabel>
 								<DropdownMenuSeparator />
-								<DropdownMenuItem className='cursor-pointer transition-colors hover:bg-muted'>
-									<Globe className='mr-2 h-4 w-4' />
-									<span>Til: O'zbekcha</span>
-								</DropdownMenuItem>
+
+								<DropdownMenuLabel className='text-xs font-bold text-muted-foreground uppercase tracking-wider'>
+									{t('nav.language') || 'Til'}
+								</DropdownMenuLabel>
+								{supportedLocales.map(loc => (
+									<DropdownMenuItem
+										key={loc}
+										className='cursor-pointer font-medium'
+										onClick={() => setLocale(loc)}
+									>
+										<Globe className='mr-2 h-4 w-4 text-muted-foreground' />
+										<span>{LOCALE_LABELS[loc]}</span>
+										{locale === loc && (
+											<Check className='ml-auto h-4 w-4 text-primary' />
+										)}
+									</DropdownMenuItem>
+								))}
+
+								<DropdownMenuSeparator />
+
 								<DropdownMenuItem
-									className='cursor-pointer transition-colors hover:bg-muted'
+									className='cursor-pointer font-medium'
 									onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
 								>
 									{theme === 'dark' ? (
-										<Sun className='mr-2 h-4 w-4' />
+										<Sun className='mr-2 h-4 w-4 text-amber-500' />
 									) : (
-										<Moon className='mr-2 h-4 w-4' />
+										<Moon className='mr-2 h-4 w-4 text-blue-500' />
 									)}
-									<span>Mavzuni o'zgartirish</span>
+									<span>{t('nav.theme') || 'Mavzu'}</span>
 								</DropdownMenuItem>
+
 								<DropdownMenuSeparator />
+
 								<DropdownMenuItem
-									className='cursor-pointer transition-colors hover:bg-muted'
+									className='cursor-pointer font-medium'
 									asChild
 								>
 									<Link
 										href='/home/support'
 										className='flex items-center w-full'
 									>
-										<LifeBuoy className='mr-2 h-4 w-4' />
-										<span>Qo'llab-quvvatlash</span>
+										<LifeBuoy className='mr-2 h-4 w-4 text-muted-foreground' />
+										<span>{t('nav.support') || 'Yordam'}</span>
 									</Link>
 								</DropdownMenuItem>
 							</DropdownMenuContent>
@@ -240,32 +241,44 @@ export default function Navbar() {
 				</div>
 			</header>
 
-			<div className='md:hidden fixed bottom-6 left-4 right-4 z-50 rounded-2xl bg-background/70 backdrop-blur-xl border border-border shadow-[0_8px_30px_rgb(0,0,0,0.12)] supports-[backdrop-filter]:bg-background/60 overflow-hidden'>
+			{/* 📱 MOBILE BOTTOM NAV */}
+			<div className='md:hidden fixed bottom-4 left-4 right-4 z-50 rounded-2xl bg-background/80 backdrop-blur-xl border border-border shadow-lg supports-[backdrop-filter]:bg-background/60 overflow-hidden pb-safe'>
 				<nav className='flex justify-around items-center h-16 px-2 relative'>
 					{NAV_LINKS.map(link => {
 						const isActive =
 							pathname === link.href ||
 							(link.href !== '/' && pathname.startsWith(link.href))
+						const Icon = link.icon
 						return (
 							<Link
 								key={link.href}
 								href={link.href}
-								className='relative flex flex-col items-center justify-center w-full h-full z-10 py-1 tap-highlight-transparent'
+								className='relative flex flex-col items-center justify-center w-full h-full z-10 py-1 select-none outline-none'
 							>
 								{isActive && (
 									<motion.div
 										layoutId='mobile-active-pill'
-										className='absolute inset-y-1.5 inset-x-2 rounded-xl bg-primary/15 dark:bg-primary/25 -z-10'
+										className='absolute inset-y-1.5 inset-x-2 rounded-xl bg-primary/10 -z-10'
 										transition={{ type: 'spring', stiffness: 350, damping: 30 }}
 									/>
 								)}
 								<div
-									className={`transition-all duration-300 transform ${isActive ? '-translate-y-0.5 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+									className={cn(
+										'transition-transform duration-300',
+										isActive
+											? '-translate-y-0.5 text-primary'
+											: 'text-muted-foreground',
+									)}
 								>
-									{link.icon}
+									<Icon className='w-5 h-5 mb-0.5' />
 								</div>
 								<span
-									className={`text-[10px] font-medium transition-all duration-300 mt-1 ${isActive ? 'opacity-100 text-primary' : 'opacity-60 text-muted-foreground'}`}
+									className={cn(
+										'text-[10px] font-bold tracking-tight transition-opacity duration-300',
+										isActive
+											? 'opacity-100 text-primary'
+											: 'opacity-0 absolute',
+									)}
 								>
 									{link.name}
 								</span>

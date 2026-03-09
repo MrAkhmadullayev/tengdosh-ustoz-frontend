@@ -1,131 +1,93 @@
 import { jwtVerify } from 'jose'
 import { NextResponse } from 'next/server'
 
+const JWT_SECRET = process.env.JWT_SECRET
+if (!JWT_SECRET) {
+	throw new Error('JWT_SECRET environment variable is not set')
+}
+const secretKey = new TextEncoder().encode(JWT_SECRET)
+
+const ROUTES = {
+	auth: '/authentication',
+	confirm: '/authentication/confirm',
+}
+
+const ROLES = {
+	admin: { prefix: '/admin', dashboard: '/admin/dashboard' },
+	mentor: { prefix: '/mentor', dashboard: '/mentor/dashboard' },
+	student: { prefix: '/student', dashboard: '/student/dashboard' },
+}
+
 export async function middleware(req) {
 	const token = req.cookies.get('auth-token')?.value
 	const path = req.nextUrl.pathname
 
-	// Define route groups
-	const isDashboardRoute =
-		path.startsWith('/student') ||
-		path.startsWith('/mentor') ||
-		path.startsWith('/admin')
-	const isAuthRoute = path.startsWith('/authentication')
+	const isAuthRoute = path.startsWith(ROUTES.auth)
+	const isDashboardRoute = Object.values(ROLES).some(r =>
+		path.startsWith(r.prefix),
+	)
 
-	// Skip middleware for public routes, API, static files, etc.
-	if (!isDashboardRoute && !isAuthRoute && path !== '/') {
+	if (!token) {
+		if (isDashboardRoute || path === ROUTES.confirm) {
+			return NextResponse.redirect(new URL(ROUTES.auth, req.url))
+		}
 		return NextResponse.next()
 	}
 
-	// 1. Dashboard protection
-	if (isDashboardRoute) {
-		if (!token) {
-			return NextResponse.redirect(new URL('/authentication', req.url))
+	try {
+		const { payload } = await jwtVerify(token, secretKey)
+		const { role, isRegistered, isResumeCompleted } = payload
+
+		const userRoleConfig = ROLES[role]
+
+		if (!isRegistered && path !== ROUTES.confirm) {
+			return NextResponse.redirect(new URL(ROUTES.confirm, req.url))
 		}
 
-		try {
-			const secret = new TextEncoder().encode(
-				process.env.JWT_SECRET ||
-					'super_secret_tengdosh_ustoz_key_change_in_production',
-			)
-			const { payload } = await jwtVerify(token, secret)
-
-			const { role, isRegistered } = payload
-
-			// Course & group are now required
-			if (!isRegistered) {
+		if (isAuthRoute) {
+			if (isRegistered && (path === ROUTES.confirm || path === ROUTES.auth)) {
 				return NextResponse.redirect(
-					new URL('/authentication/confirm', req.url),
+					new URL(userRoleConfig?.dashboard || '/', req.url),
 				)
 			}
+			return NextResponse.next()
+		}
 
-			// Role based access control mapping
-			const validRoles = {
-				'/admin': 'admin',
-				'/mentor': 'mentor',
-				'/student': 'student',
-			}
-
-			for (const [route, requiredRole] of Object.entries(validRoles)) {
-				if (path.startsWith(route) && role !== requiredRole) {
-					return NextResponse.redirect(new URL(`/${role}/dashboard`, req.url))
+		if (isDashboardRoute) {
+			for (const roleKey in ROLES) {
+				if (path.startsWith(ROLES[roleKey].prefix) && role !== roleKey) {
+					return NextResponse.redirect(
+						new URL(userRoleConfig?.dashboard || '/', req.url),
+					)
 				}
 			}
 
-			// If mentor role, enforce they complete their resume BEFORE accessing any mentor dashboards
-			if (
-				role === 'mentor' &&
-				path.startsWith('/mentor') &&
-				path !== '/mentor/resume'
-			) {
-				if (payload.isResumeCompleted === false) {
+			if (role === 'mentor' && path.startsWith(ROLES.mentor.prefix)) {
+				const isResumeRoute = path === '/mentor/resume'
+
+				if (!isResumeCompleted && !isResumeRoute) {
 					return NextResponse.redirect(new URL('/mentor/resume', req.url))
 				}
-			}
 
-			// If mentor has completed their resume, protect them from going to /mentor/resume again
-			if (
-				role === 'mentor' &&
-				path === '/mentor/resume' &&
-				payload.isResumeCompleted === true
-			) {
-				return NextResponse.redirect(new URL('/mentor/dashboard', req.url))
-			}
-		} catch (error) {
-			// Token is invalid or expired
-			const response = NextResponse.redirect(
-				new URL('/authentication', req.url),
-			)
-			response.cookies.delete('auth-token')
-			return response
-		}
-	}
-
-	// 2. Auth Route Protection (Prevent logged in users from visiting login pages)
-	if (isAuthRoute) {
-		if (token) {
-			try {
-				const secret = new TextEncoder().encode(
-					process.env.JWT_SECRET ||
-						'super_secret_tengdosh_ustoz_key_change_in_production',
-				)
-				const { payload } = await jwtVerify(token, secret)
-
-				if (!payload.isRegistered && path !== '/authentication/confirm') {
-					return NextResponse.redirect(
-						new URL('/authentication/confirm', req.url),
-					)
-				} else if (
-					payload.isRegistered &&
-					(path === '/authentication/confirm' || path === '/authentication')
-				) {
-					return NextResponse.redirect(
-						new URL(`/${payload.role}/dashboard`, req.url),
-					)
+				if (isResumeCompleted && isResumeRoute) {
+					return NextResponse.redirect(new URL(ROLES.mentor.dashboard, req.url))
 				}
-			} catch (error) {
-				// Invalid token on login page, let them stay to login naturally. We can clear it.
-				const response = NextResponse.next()
-				response.cookies.delete('auth-token')
-				return response
-			}
-		} else {
-			// No token, but trying to access /authentication/confirm
-			// We should protect confirm page from unauthenticated users
-			if (path === '/authentication/confirm') {
-				return NextResponse.redirect(new URL('/authentication', req.url))
 			}
 		}
-	}
 
-	return NextResponse.next()
+		return NextResponse.next()
+	} catch (error) {
+		const response = isDashboardRoute
+			? NextResponse.redirect(new URL(ROUTES.auth, req.url))
+			: NextResponse.next()
+
+		response.cookies.delete('auth-token')
+		return response
+	}
 }
 
 export const config = {
 	matcher: [
-		'/student/:path*',
-		'/mentor/:path*',
-		'/admin/:path*',
-		'/authentication/:path*',
+		'/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
 	],
 }

@@ -1,6 +1,5 @@
 'use client'
 
-import { Badge } from '@/components/ui/badge'
 import {
 	Card,
 	CardContent,
@@ -10,6 +9,7 @@ import {
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import api from '@/lib/api'
+import { useTranslation } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import {
@@ -23,51 +23,78 @@ import {
 	Users,
 	UserX,
 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
-const TIME_RANGES = [
-	{ key: 'daily', label: 'Kunlik' },
-	{ key: 'monthly', label: 'Oylik' },
-	{ key: 'yearly', label: 'Yillik' },
-]
-
-// Yuklanish jarayoni uchun Skeleton komponenti
+// ==========================================
+// 🧩 YORDAMCHI KOMPONENTLAR (Skeleton)
+// ==========================================
 const DashboardSkeleton = () => (
-	<div className='max-w-7xl mx-auto space-y-8 pb-12 animate-in fade-in duration-500'>
-		<div className='flex flex-col md:flex-row md:items-center justify-between gap-4'>
+	<div className='max-w-7xl mx-auto space-y-6 pb-12 pt-6 px-4 sm:px-6 lg:px-8 animate-pulse'>
+		<div className='flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6'>
 			<div className='space-y-2'>
-				<Skeleton className='h-9 w-64' />
+				<Skeleton className='h-8 w-64' />
 				<Skeleton className='h-4 w-80' />
 			</div>
-			<Skeleton className='h-10 w-64 rounded-xl' />
+			<Skeleton className='h-10 w-64 rounded-md' />
 		</div>
 
 		<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6'>
 			{[1, 2, 3, 4].map(i => (
-				<Skeleton key={i} className='h-36 w-full rounded-3xl' />
+				<Skeleton key={i} className='h-32 w-full rounded-xl' />
 			))}
 		</div>
 
-		<div className='grid grid-cols-1 lg:grid-cols-2 gap-8'>
-			<Skeleton className='h-[450px] w-full rounded-3xl' />
-			<Skeleton className='h-[450px] w-full rounded-3xl' />
+		<div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+			<Skeleton className='h-[450px] w-full rounded-xl' />
+			<Skeleton className='h-[450px] w-full rounded-xl' />
 		</div>
 
-		<Skeleton className='h-[400px] w-full rounded-3xl' />
+		<Skeleton className='h-[400px] w-full rounded-xl' />
 	</div>
 )
 
+// ==========================================
+// 🚀 ASOSIY KOMPONENT
+// ==========================================
 export default function KPIDashboardPage() {
+	const { t } = useTranslation()
+
 	const [timeRange, setTimeRange] = useState('monthly')
 	const [stats, setStats] = useState(null)
 	const [loading, setLoading] = useState(true)
 
+	// Time ranges (O'zgaruvchi qayta yaratilmasligi uchun useMemo da)
+	const timeRanges = useMemo(
+		() => [
+			{ key: 'daily', label: t('dashboard.daily') || 'Kunlik' },
+			{ key: 'monthly', label: t('dashboard.monthly') || 'Oylik' },
+			{ key: 'yearly', label: t('dashboard.yearly') || 'Yillik' },
+		],
+		[t],
+	)
+
+	// 1. API dan statistikani tortish
 	const fetchStats = useCallback(async range => {
 		try {
 			setLoading(true)
-			const res = await api.get(`/admin/kpi/stats?range=${range}`)
-			if (res.data.success) {
+			// Agar admin kpi API yo'q bo'lsa xatolik yozmasdan shunchaki null qaytaradi
+			const res = await api
+				.get(`/admin/kpi/stats?range=${range}`)
+				.catch(() => null)
+
+			if (res?.data?.success) {
 				setStats(res.data.stats)
+			} else {
+				// Fallback ma'lumot (Agar API tayyor bo'lmasa qotib qolmasligi uchun)
+				setStats({
+					totalStudents: 0,
+					activeMentors: 0,
+					totalLessons: 0,
+					pendingApplications: 0,
+					chartData: [],
+					lessonAttendance: [],
+					userActivity: [],
+				})
 			}
 		} catch (error) {
 			console.error('Failed to fetch stats', error)
@@ -80,45 +107,49 @@ export default function KPIDashboardPage() {
 		fetchStats(timeRange)
 	}, [timeRange, fetchStats])
 
-	const getTrend = change => {
+	// 2. Trendni aniqlash (+ yoki -)
+	const getTrend = useCallback(change => {
 		if (!change) return 'up'
-		return change.startsWith('-') ? 'down' : 'up'
-	}
+		return change.toString().startsWith('-') ? 'down' : 'up'
+	}, [])
 
-	// Loading holati endi Skeleton qaytaradi
+	// UI: Loading holati (Dastlabki kirganda)
 	if (loading && !stats) {
 		return <DashboardSkeleton />
 	}
 
+	// Diagramma uchun maksimal qiymatni aniqlash
 	const chartData = stats?.chartData || []
 	const maxChartVal = Math.max(
-		...chartData.map(d => Math.max(d.students, d.mentors)),
+		...chartData.map(d => Math.max(d.students || 0, d.mentors || 0)),
 		1,
 	)
 
+	// UI: Asosiy Dashboard
 	return (
-		<div className='max-w-7xl mx-auto space-y-8 pb-12'>
-			{/* Header */}
-			<div className='flex flex-col md:flex-row md:items-center justify-between gap-4'>
+		<div className='max-w-7xl mx-auto space-y-6 pb-12 pt-6 px-4 sm:px-6 lg:px-8'>
+			{/* 🏷️ HEADER & FILTERS */}
+			<div className='flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6'>
 				<div>
-					<h1 className='text-3xl font-bold tracking-tight'>
-						KPI Ko&apos;rsatkichlar
+					<h1 className='text-2xl font-bold tracking-tight'>
+						{t('dashboard.kpiIndicators') || "KPI Ko'rsatkichlari"}
 					</h1>
 					<p className='text-muted-foreground mt-1 text-sm'>
-						Darslar, foydalanuvchilar faolligi va davomat tahlili.
+						{t('dashboard.kpiDesc') ||
+							"Tizimdagi umumiy o'sish va faollik tahlili"}
 					</p>
 				</div>
 				<div className='flex items-center gap-3'>
-					<div className='flex items-center bg-muted/50 rounded-xl p-1 gap-1'>
-						{TIME_RANGES.map(r => (
+					<div className='flex items-center bg-muted p-1 rounded-md border shadow-sm'>
+						{timeRanges.map(r => (
 							<button
 								key={r.key}
 								onClick={() => setTimeRange(r.key)}
 								className={cn(
-									'px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200',
+									'px-4 py-1.5 rounded-sm text-sm font-medium transition-all',
 									timeRange === r.key
-										? 'bg-primary text-white shadow-md shadow-primary/25'
-										: 'text-muted-foreground hover:text-foreground hover:bg-muted',
+										? 'bg-background text-foreground shadow-sm'
+										: 'text-muted-foreground hover:text-foreground',
 								)}
 							>
 								{r.label}
@@ -128,164 +159,140 @@ export default function KPIDashboardPage() {
 				</div>
 			</div>
 
-			{/* Orqa fonda ma'lumot yangilanayotganini ko'rsatish */}
 			{loading && stats && (
-				<div className='flex items-center justify-end text-sm text-muted-foreground animate-pulse'>
-					Yangilanmoqda...
+				<div className='flex items-center justify-end text-xs font-medium text-muted-foreground animate-pulse mt-[-10px]'>
+					{t('dashboard.updating') || 'Yangilanmoqda...'}
 				</div>
 			)}
 
-			{/* Main Metrics */}
-			<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6'>
+			{/* 📊 ASOSIY KARTALAR (TOP CARDS) */}
+			<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
 				{[
 					{
-						title: "Jami O'quvchilar",
+						title: t('dashboard.totalStudents') || 'Jami Talabalar',
 						value: stats?.totalStudents || 0,
 						change: stats?.studentsChange,
-						icon: <GraduationCap className='w-6 h-6 text-blue-500' />,
-						bg: 'bg-blue-50',
+						icon: GraduationCap,
 					},
 					{
-						title: 'Faol Mentorlar',
+						title: t('dashboard.activeMentors') || 'Faol Mentorlar',
 						value: stats?.activeMentors || 0,
 						change: stats?.mentorsChange,
-						icon: <Users className='w-6 h-6 text-green-500' />,
-						bg: 'bg-green-50',
+						icon: Users,
 					},
 					{
-						title: 'Jami Darslar',
+						title: t('dashboard.totalLessons') || 'Jami Darslar',
 						value: stats?.totalLessons || 0,
 						change: stats?.lessonsChange,
-						icon: <BookOpen className='w-6 h-6 text-purple-500' />,
-						bg: 'bg-purple-50',
+						icon: BookOpen,
 					},
 					{
-						title: 'Yangi Arizalar',
+						title: t('dashboard.newApplications') || 'Yangi Arizalar',
 						value: stats?.pendingApplications || 0,
-						icon: <Activity className='w-6 h-6 text-orange-500' />,
-						bg: 'bg-orange-50',
+						change: null, // Arizalarda o'zgarish foizi shart emas
+						icon: Activity,
 					},
 				].map((m, idx) => {
 					const trend = getTrend(m.change)
 					return (
 						<Card
 							key={idx}
-							className='group hover:shadow-xl transition-all duration-300 border-muted/60 rounded-3xl overflow-hidden relative'
+							className='shadow-sm hover:shadow-md transition-shadow'
 						>
 							<CardContent className='p-6'>
-								<div className='flex items-center justify-between mb-4'>
-									<div
-										className={cn(
-											'p-3 rounded-2xl transition-transform group-hover:scale-110 duration-300',
-											m.bg,
-										)}
-									>
-										{m.icon}
-									</div>
+								<div className='flex items-center justify-between space-y-0 pb-2'>
+									<p className='text-sm font-medium text-muted-foreground'>
+										{m.title}
+									</p>
+									<m.icon className='h-4 w-4 text-muted-foreground' />
+								</div>
+								<div className='flex items-baseline justify-between mt-2'>
+									<h2 className='text-3xl font-bold tracking-tight'>
+										{m.value.toLocaleString()}
+									</h2>
 									{m.change && (
-										<Badge
-											variant='outline'
+										<span
 											className={cn(
-												'rounded-lg gap-1 border-none font-bold',
-												trend === 'up'
-													? 'text-green-600 bg-green-50'
-													: 'text-red-600 bg-red-50',
+												'flex items-center text-xs font-medium',
+												trend === 'up' ? 'text-green-600' : 'text-red-600',
 											)}
 										>
 											{trend === 'up' ? (
-												<ArrowUpRight className='w-3 h-3' />
+												<ArrowUpRight className='mr-1 h-3 w-3' />
 											) : (
-												<ArrowDownRight className='w-3 h-3' />
+												<ArrowDownRight className='mr-1 h-3 w-3' />
 											)}
 											{m.change}
-										</Badge>
+										</span>
 									)}
 								</div>
-								<p className='text-muted-foreground text-sm font-medium'>
-									{m.title}
-								</p>
-								<h2 className='text-3xl font-extrabold tracking-tight'>
-									{m.value.toLocaleString()}
-								</h2>
 							</CardContent>
-							<div
-								className={cn(
-									'absolute bottom-0 left-0 h-1 w-full',
-									trend === 'up' ? 'bg-green-500/20' : 'bg-red-500/20',
-								)}
-							/>
 						</Card>
 					)
 				})}
 			</div>
 
-			{/* Darslar Tahlili */}
-			<div className='grid grid-cols-1 lg:grid-cols-2 gap-8'>
-				{/* Dars bo'yicha kelish tahlili */}
-				<Card className='shadow-sm border-muted rounded-3xl overflow-hidden'>
-					<CardHeader className='bg-muted/30 border-b p-6'>
-						<CardTitle className='text-lg flex items-center gap-2'>
-							<UserCheck className='w-5 h-5 text-green-500' /> Dars Davomat
-							Tahlili
+			{/* 📈 O'RTA QISM (Davomat va Faollik) */}
+			<div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+				{/* CHAP: Davomat tahlili */}
+				<Card className='shadow-sm flex flex-col'>
+					<CardHeader className='border-b bg-muted/20 pb-4'>
+						<CardTitle className='text-base flex items-center gap-2'>
+							<UserCheck className='w-4 h-4 text-muted-foreground' />
+							{t('dashboard.attendanceAnalysis') || 'Davomat Tahlili'}
 						</CardTitle>
-						<CardDescription>
-							Har bir darsga nechta talaba yozilgan va nechta kelgan
+						<CardDescription className='text-xs'>
+							Oxirgi darslardagi qatnashish ko'rsatkichi
 						</CardDescription>
 					</CardHeader>
-					<CardContent className='p-0'>
-						<div className='divide-y max-h-[400px] overflow-auto'>
+					<CardContent className='p-0 flex-1 overflow-auto max-h-[400px] no-scrollbar'>
+						<div className='divide-y'>
 							{stats?.lessonAttendance?.length > 0 ? (
-								stats.lessonAttendance.map((lesson, idx) => {
+								stats.lessonAttendance.map(lesson => {
 									const attendRate =
 										lesson.registered > 0
 											? Math.round((lesson.attended / lesson.registered) * 100)
 											: 0
 									return (
-										<motion.div
-											initial={{ opacity: 0, x: -10 }}
-											animate={{ opacity: 1, x: 0 }}
-											transition={{ delay: idx * 0.05 }}
+										<div
 											key={lesson.id}
-											className='p-4 hover:bg-muted/20 transition-colors'
+											className='p-4 hover:bg-muted/30 transition-colors'
 										>
 											<div className='flex items-center justify-between mb-2'>
-												<div className='flex-1 min-w-0'>
-													<p className='font-bold text-sm truncate'>
+												<div className='flex-1 min-w-0 pr-4'>
+													<p className='font-semibold text-sm truncate text-foreground'>
 														{lesson.title}
 													</p>
-													<p className='text-xs text-muted-foreground'>
+													<p className='text-xs text-muted-foreground truncate'>
 														{lesson.mentorName}
 													</p>
 												</div>
-												<Badge
-													variant='outline'
+												<span
 													className={cn(
-														'ml-2 border-none font-bold',
+														'text-xs font-bold',
 														attendRate >= 70
-															? 'bg-green-50 text-green-600'
+															? 'text-green-600'
 															: attendRate >= 40
-																? 'bg-yellow-50 text-yellow-600'
-																: 'bg-red-50 text-red-600',
+																? 'text-yellow-600'
+																: 'text-destructive',
 													)}
 												>
 													{attendRate}%
-												</Badge>
+												</span>
 											</div>
-											<div className='flex items-center gap-4 text-xs'>
-												<span className='flex items-center gap-1 text-blue-600'>
+
+											<div className='flex items-center gap-4 text-xs mt-2 mb-3'>
+												<span className='flex items-center gap-1 text-muted-foreground'>
 													<Users className='w-3 h-3' /> {lesson.registered}{' '}
-													yozilgan
+													{t('dashboard.registered') || 'yozilgan'}
 												</span>
-												<span className='flex items-center gap-1 text-green-600'>
+												<span className='flex items-center gap-1 text-muted-foreground'>
 													<UserCheck className='w-3 h-3' /> {lesson.attended}{' '}
-													kelgan
-												</span>
-												<span className='flex items-center gap-1 text-red-500'>
-													<UserX className='w-3 h-3' />{' '}
-													{lesson.registered - lesson.attended} kelmagan
+													{t('dashboard.attended') || 'qatnashdi'}
 												</span>
 											</div>
-											<div className='mt-2 h-2 bg-muted rounded-full overflow-hidden'>
+
+											<div className='h-1.5 bg-muted rounded-full overflow-hidden'>
 												<motion.div
 													initial={{ width: 0 }}
 													animate={{ width: `${attendRate}%` }}
@@ -296,82 +303,89 @@ export default function KPIDashboardPage() {
 															? 'bg-green-500'
 															: attendRate >= 40
 																? 'bg-yellow-500'
-																: 'bg-red-500',
+																: 'bg-destructive',
 													)}
 												/>
 											</div>
-										</motion.div>
+										</div>
 									)
 								})
 							) : (
-								<div className='p-8 text-center text-muted-foreground text-sm'>
-									Davomat ma&apos;lumotlari mavjud emas
+								<div className='p-12 text-center text-muted-foreground text-sm flex flex-col items-center'>
+									<UserX className='w-8 h-8 mb-2 opacity-20' />
+									{t('dashboard.noAttendanceData') ||
+										"Davomat ma'lumotlari hozircha yo'q"}
 								</div>
 							)}
 						</div>
 					</CardContent>
 				</Card>
 
-				{/* Foydalanuvchilar faolligi */}
-				<Card className='shadow-sm border-muted rounded-3xl overflow-hidden'>
-					<CardHeader className='bg-muted/30 border-b p-6'>
-						<CardTitle className='text-lg flex items-center gap-2'>
-							<Activity className='w-5 h-5 text-primary' /> Foydalanuvchilar
-							Faolligi
+				{/* O'NG: Foydalanuvchi faolligi */}
+				<Card className='shadow-sm flex flex-col'>
+					<CardHeader className='border-b bg-muted/20 pb-4'>
+						<CardTitle className='text-base flex items-center gap-2'>
+							<Activity className='w-4 h-4 text-muted-foreground' />
+							{t('dashboard.userActivity') || 'Foydalanuvchi Faolligi'}
 						</CardTitle>
-						<CardDescription>
-							Tizimdan foydalanish va darslar faollik darajasi
+						<CardDescription className='text-xs'>
+							Platformadan foydalanish darajasi
 						</CardDescription>
 					</CardHeader>
-					<CardContent className='p-6 space-y-6'>
-						{(stats?.userActivity || []).map((item, idx) => (
-							<div key={idx} className='space-y-3'>
-								<div className='flex items-center justify-between text-sm font-bold'>
-									<span className='text-muted-foreground'>{item.label}</span>
-									<span>{item.value}%</span>
+					<CardContent className='p-6 space-y-6 flex-1 flex flex-col justify-between'>
+						<div className='space-y-6'>
+							{(stats?.userActivity || []).map((item, idx) => (
+								<div key={idx} className='space-y-2'>
+									<div className='flex items-center justify-between text-sm'>
+										<span className='font-medium text-foreground'>
+											{item.label}
+										</span>
+										<span className='text-muted-foreground'>{item.value}%</span>
+									</div>
+									<div className='h-2 w-full bg-muted rounded-full overflow-hidden'>
+										<motion.div
+											initial={{ width: 0 }}
+											animate={{ width: `${item.value}%` }}
+											transition={{
+												duration: 1,
+												ease: 'easeOut',
+												delay: idx * 0.1,
+											}}
+											className={cn(
+												'h-full rounded-full',
+												idx === 0
+													? 'bg-primary'
+													: idx === 1
+														? 'bg-blue-500'
+														: 'bg-purple-500',
+											)}
+										/>
+									</div>
 								</div>
-								<div className='h-3 w-full bg-muted rounded-full overflow-hidden'>
-									<motion.div
-										initial={{ width: 0 }}
-										animate={{ width: `${item.value}%` }}
-										transition={{
-											duration: 1,
-											ease: 'easeOut',
-											delay: idx * 0.1,
-										}}
-										className={cn(
-											'h-full rounded-full',
-											idx === 0
-												? 'bg-blue-500'
-												: idx === 1
-													? 'bg-green-500'
-													: 'bg-purple-500',
-										)}
-									/>
+							))}
+
+							{(!stats?.userActivity || stats.userActivity.length === 0) && (
+								<div className='text-center text-muted-foreground text-sm py-10 flex flex-col items-center'>
+									<Activity className='w-8 h-8 mb-2 opacity-20' />
+									{t('dashboard.noActivityData') || "Faollik ma'lumotlari yo'q"}
 								</div>
-							</div>
-						))}
+							)}
+						</div>
 
-						{(!stats?.userActivity || stats.userActivity.length === 0) && (
-							<div className='text-center text-muted-foreground text-sm py-4'>
-								Faollik ma&apos;lumotlari mavjud emas
-							</div>
-						)}
-
-						<div className='grid grid-cols-2 gap-4 pt-4 border-t'>
-							<div className='bg-blue-50 p-4 rounded-2xl space-y-1'>
-								<p className='text-[10px] text-blue-600 font-bold uppercase'>
-									Bugungi darslar
+						<div className='grid grid-cols-2 gap-4 pt-6 border-t mt-auto'>
+							<div className='bg-muted/30 p-4 rounded-xl border shadow-sm flex flex-col justify-center items-center text-center'>
+								<p className='text-xs text-muted-foreground font-medium mb-1'>
+									{t('dashboard.todayLessons') || 'Bugungi darslar'}
 								</p>
-								<p className='text-2xl font-bold text-blue-700'>
+								<p className='text-2xl font-bold text-foreground'>
 									{stats?.todayLessonsCount || 0}
 								</p>
 							</div>
-							<div className='bg-green-50 p-4 rounded-2xl space-y-1'>
-								<p className='text-[10px] text-green-600 font-bold uppercase'>
-									Faol mentorlar
+							<div className='bg-muted/30 p-4 rounded-xl border shadow-sm flex flex-col justify-center items-center text-center'>
+								<p className='text-xs text-muted-foreground font-medium mb-1'>
+									{t('dashboard.activeMentors') || 'Faol Mentorlar'}
 								</p>
-								<p className='text-2xl font-bold text-green-700'>
+								<p className='text-2xl font-bold text-foreground'>
 									{stats?.activeMentors || 0}
 								</p>
 							</div>
@@ -380,62 +394,73 @@ export default function KPIDashboardPage() {
 				</Card>
 			</div>
 
-			{/* O'sish grafigi */}
-			<Card className='shadow-sm border-muted rounded-3xl overflow-hidden'>
-				<CardHeader className='bg-muted/30 border-b p-6'>
-					<div className='flex items-center justify-between'>
-						<div className='space-y-1'>
-							<CardTitle className='text-lg flex items-center gap-2'>
-								<TrendingUp className='w-5 h-5 text-primary' /> Yangi
-								Foydalanuvchilar
-							</CardTitle>
-							<CardDescription>
-								Yangi qo&apos;shilgan talaba va mentorlar soni
-							</CardDescription>
+			{/* 📈 PASTKI QISM (O'sish grafigi) */}
+			<Card className='shadow-sm'>
+				<CardHeader className='border-b bg-muted/20 pb-4 flex flex-row items-center justify-between'>
+					<div>
+						<CardTitle className='text-base flex items-center gap-2'>
+							<TrendingUp className='w-4 h-4 text-muted-foreground' />
+							{t('dashboard.growthGraph') || "O'sish Grafigi"}
+						</CardTitle>
+						<CardDescription className='text-xs mt-1'>
+							Vaqt kesimida foydalanuvchilar o'sishi
+						</CardDescription>
+					</div>
+					<div className='flex items-center gap-3 text-xs font-medium'>
+						<div className='flex items-center gap-1.5'>
+							<span className='w-2.5 h-2.5 rounded-full bg-primary' />
+							{t('dashboard.students') || 'Talabalar'}
 						</div>
-						<div className='flex items-center gap-4 text-xs font-semibold'>
-							<div className='flex items-center gap-2'>
-								<span className='w-3 h-3 rounded-full bg-blue-500' /> Talabalar
-							</div>
-							<div className='flex items-center gap-2'>
-								<span className='w-3 h-3 rounded-full bg-green-500' /> Mentorlar
-							</div>
+						<div className='flex items-center gap-1.5'>
+							<span className='w-2.5 h-2.5 rounded-full bg-blue-500' />
+							{t('dashboard.mentors') || 'Mentorlar'}
 						</div>
 					</div>
 				</CardHeader>
-				<CardContent className='p-8'>
-					<div className='flex items-end justify-between h-48 gap-3'>
-						{chartData.map((d, i) => {
-							const sH = maxChartVal > 0 ? (d.students / maxChartVal) * 100 : 5
-							const mH = maxChartVal > 0 ? (d.mentors / maxChartVal) * 100 : 2
-							return (
-								<div
-									key={i}
-									className='flex-1 flex flex-col items-center gap-2 group/bar'
-								>
-									<div className='text-[10px] text-muted-foreground font-bold opacity-0 group-hover/bar:opacity-100 transition-opacity'>
-										{d.students}/{d.mentors}
+				<CardContent className='p-6'>
+					<div className='flex items-end justify-between h-48 gap-2'>
+						{chartData.length > 0 ? (
+							chartData.map((d, i) => {
+								const sH =
+									maxChartVal > 0 ? (d.students / maxChartVal) * 100 : 5
+								const mH = maxChartVal > 0 ? (d.mentors / maxChartVal) * 100 : 2
+								return (
+									<div
+										key={i}
+										className='flex-1 flex flex-col items-center gap-2 group/bar h-full'
+									>
+										{/* Tooltip (Hover qilganda chiqadi) */}
+										<div className='text-[10px] text-muted-foreground font-medium opacity-0 group-hover/bar:opacity-100 transition-opacity whitespace-nowrap bg-muted px-1.5 py-0.5 rounded'>
+											{d.students} / {d.mentors}
+										</div>
+
+										{/* Ustunlar (Bars) */}
+										<div className='w-full flex gap-1 items-end justify-center h-full relative'>
+											<motion.div
+												initial={{ height: 0 }}
+												animate={{ height: `${Math.max(sH, 2)}%` }}
+												transition={{ duration: 0.8, delay: i * 0.05 }}
+												className='w-full bg-primary/20 group-hover/bar:bg-primary rounded-t-sm transition-colors'
+											/>
+											<motion.div
+												initial={{ height: 0 }}
+												animate={{ height: `${Math.max(mH, 2)}%` }}
+												transition={{ duration: 0.8, delay: i * 0.05 }}
+												className='w-full bg-blue-500/20 group-hover/bar:bg-blue-500 rounded-t-sm transition-colors'
+											/>
+										</div>
+
+										<span className='text-[10px] text-muted-foreground truncate w-full text-center'>
+											{d.label}
+										</span>
 									</div>
-									<div className='w-full flex gap-1 items-end justify-center'>
-										<motion.div
-											initial={{ height: 0 }}
-											animate={{ height: `${Math.max(sH, 4)}%` }}
-											transition={{ duration: 0.8, delay: i * 0.05 }}
-											className='w-full bg-blue-500/20 group-hover/bar:bg-blue-500 rounded-t-lg transition-colors duration-300'
-										/>
-										<motion.div
-											initial={{ height: 0 }}
-											animate={{ height: `${Math.max(mH, 4)}%` }}
-											transition={{ duration: 0.8, delay: i * 0.05 }}
-											className='w-full bg-green-500/20 group-hover/bar:bg-green-500 rounded-t-lg transition-colors duration-300'
-										/>
-									</div>
-									<span className='text-[10px] text-muted-foreground font-mono'>
-										{d.label}
-									</span>
-								</div>
-							)
-						})}
+								)
+							})
+						) : (
+							<div className='w-full h-full flex items-center justify-center text-sm text-muted-foreground border border-dashed rounded-lg bg-muted/10'>
+								Grafik ma'lumotlari yo'q
+							</div>
+						)}
 					</div>
 				</CardContent>
 			</Card>

@@ -28,36 +28,39 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import api from '@/lib/api'
-import { cn } from '@/lib/utils'
+import { useTranslation } from '@/lib/i18n'
+// 🔥 Markazlashgan utilitalar
+import { cn, getErrorMessage } from '@/lib/utils'
 import { format } from 'date-fns'
 import { uz } from 'date-fns/locale'
 import { motion } from 'framer-motion'
 import {
 	ArrowLeft,
+	BookOpen,
 	Calendar as CalendarIcon,
-	CheckCircle2,
 	Clock,
 	Loader2,
 	MapPin,
 	MessagesSquare,
 	Save,
-	ShieldAlert,
 	Users,
 	Video,
 } from 'lucide-react'
+import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { toast } from 'sonner' // 🔥 Toast import qilindi
 
+// ==========================================
+// 🎨 ANIMATSIYA VARIANTLARI
+// ==========================================
 const containerVariants = {
 	hidden: { opacity: 0 },
-	show: {
-		opacity: 1,
-		transition: { staggerChildren: 0.1 },
-	},
+	show: { opacity: 1, transition: { staggerChildren: 0.1 } },
 }
 
 const itemVariants = {
-	hidden: { opacity: 0, y: 20 },
+	hidden: { opacity: 0, y: 15 },
 	show: {
 		opacity: 1,
 		y: 0,
@@ -65,16 +68,19 @@ const itemVariants = {
 	},
 }
 
+// ==========================================
+// 🚀 ASOSIY KOMPONENT
+// ==========================================
 export default function EditLessonPage() {
-	const params = useParams()
-	const { id } = params
+	const { id } = useParams()
 	const router = useRouter()
+	const { t } = useTranslation()
+
 	const [isLoading, setIsLoading] = useState(false)
 	const [isDataLoading, setIsDataLoading] = useState(true)
 	const [mentors, setMentors] = useState([])
-	const [errorMsg, setErrorMsg] = useState('')
-	const [successMsg, setSuccessMsg] = useState('')
 
+	// Form holati
 	const [formData, setFormData] = useState({
 		title: '',
 		mentor: '',
@@ -88,6 +94,7 @@ export default function EditLessonPage() {
 		status: 'upcoming',
 	})
 
+	// 1. API dan ma'lumotlarni yuklash (Parallel request)
 	useEffect(() => {
 		const fetchData = async () => {
 			try {
@@ -98,14 +105,22 @@ export default function EditLessonPage() {
 				])
 
 				if (mentorRes?.data?.success) {
-					setMentors(mentorRes.data.mentors)
+					// 🔥 CRASH FIX: Mentorlar ID sini string qilish va formatlash
+					const safeMentors = mentorRes.data.mentors.map(m => ({
+						id: String(m._id || m.id),
+						name:
+							m.name ||
+							`${m.firstName || ''} ${m.lastName || ''}`.trim() ||
+							"Noma'lum Mentor",
+					}))
+					setMentors(safeMentors)
 				}
 
 				if (lessonRes?.data?.success) {
 					const l = lessonRes.data.lesson
 					setFormData({
 						title: l.title || '',
-						mentor: l.mentor?._id || l.mentor || '',
+						mentor: String(l.mentor?._id || l.mentor || ''), // 🔥 Mentor ID string bo'lishi shart
 						date: l.date ? new Date(l.date).toISOString().split('T')[0] : '',
 						time: l.time || '',
 						format: l.format || 'online',
@@ -117,19 +132,42 @@ export default function EditLessonPage() {
 					})
 				}
 			} catch (error) {
-				console.error("Ma'lumotlarni yuklashda xatolik:", error)
-				setErrorMsg("Ma'lumotlarni yuklab bo'lmadi")
+				toast.error(
+					getErrorMessage(
+						error,
+						t('errors.fetchFailed') || "Ma'lumotlarni yuklashda xatolik",
+					),
+				)
 			} finally {
 				setIsDataLoading(false)
 			}
 		}
-		if (id) fetchData()
-	}, [id])
 
+		if (id) fetchData()
+	}, [id, t])
+
+	// 2. Input o'zgarishlarini kuzatish
+	const handleChange = useCallback((field, value) => {
+		setFormData(prev => ({ ...prev, [field]: value }))
+	}, [])
+
+	const handleTimeChange = useCallback((type, value) => {
+		setFormData(prev => {
+			const currentHours = prev.time?.split(':')[0] || '15'
+			const currentMinutes = prev.time?.split(':')[1] || '00'
+			return {
+				...prev,
+				time:
+					type === 'hour'
+						? `${value}:${currentMinutes}`
+						: `${currentHours}:${value}`,
+			}
+		})
+	}, [])
+
+	// 3. Formni yuborish (Saqlash)
 	const handleSave = async e => {
 		if (e) e.preventDefault()
-		setErrorMsg('')
-		setSuccessMsg('')
 
 		if (
 			!formData.title ||
@@ -137,33 +175,57 @@ export default function EditLessonPage() {
 			!formData.time ||
 			!formData.mentor
 		) {
-			setErrorMsg("Barcha majburiy maydonlarni to'ldiring.")
+			toast.warning(
+				t('errors.fillRequiredFields') ||
+					"Barcha majburiy maydonlarni to'ldiring.",
+			)
+			return
+		}
+
+		if (
+			(formData.format === 'offline' || formData.format === 'hybrid') &&
+			!formData.roomNumber
+		) {
+			toast.warning(
+				t('errors.roomRequired') ||
+					'Offline darslar uchun xona raqamini kiritish shart.',
+			)
 			return
 		}
 
 		setIsLoading(true)
 		try {
-			const res = await api.put(`/admin/lessons/${id}`, formData)
+			// 🔥 CRASH FIX: maxStudents string emas, raqam bo'lishi shart!
+			const payload = {
+				...formData,
+				maxStudents: Number(formData.maxStudents) || 100,
+			}
+
+			const res = await api.put(`/admin/lessons/${id}`, payload)
+
 			if (res?.data?.success) {
-				setSuccessMsg("O'zgarishlar saqlandi! Yo'naltirilmoqda...")
-				setTimeout(() => {
-					router.push('/admin/lessons')
-					router.refresh()
-				}, 1500)
+				toast.success(
+					t('common.updateSuccess') || "O'zgarishlar muvaffaqiyatli saqlandi!",
+				)
+				router.push('/admin/lessons')
+				router.refresh()
 			}
 		} catch (error) {
-			console.error(error)
-			setErrorMsg(
-				error.response?.data?.message || 'Saqlashda xatolik yuz berdi',
+			toast.error(
+				getErrorMessage(
+					error,
+					t('errors.updateFailed') || 'Saqlashda xatolik yuz berdi',
+				),
 			)
 		} finally {
 			setIsLoading(false)
 		}
 	}
 
+	// 4. UI: Loading Skeleton
 	if (isDataLoading) {
 		return (
-			<div className='max-w-5xl mx-auto space-y-6 pt-6 pb-20'>
+			<div className='max-w-5xl mx-auto space-y-6 pt-6 pb-20 px-4 sm:px-6 animate-pulse'>
 				<div className='flex items-center gap-4 border-b pb-4'>
 					<Skeleton className='h-10 w-10 rounded-full' />
 					<div className='space-y-2'>
@@ -182,32 +244,30 @@ export default function EditLessonPage() {
 		)
 	}
 
+	// 5. UI: Asosiy Forma
 	return (
 		<motion.div
 			variants={containerVariants}
 			initial='hidden'
 			animate='show'
-			className='max-w-5xl mx-auto space-y-6 pb-24 pt-4 sm:pt-6 w-full'
+			className='max-w-5xl mx-auto space-y-6 pb-24 pt-6 px-4 sm:px-6 w-full'
 		>
+			{/* 🏷️ HEADER */}
 			<motion.div
 				variants={itemVariants}
 				className='flex items-center gap-4 border-b pb-4'
 			>
-				<Button
-					type='button'
-					variant='outline'
-					size='icon'
-					onClick={() => router.push('/admin/lessons')}
-					className='h-10 w-10 rounded-full shrink-0 hover:bg-primary/5'
-				>
-					<ArrowLeft className='h-5 w-5' />
+				<Button variant='outline' size='icon' asChild>
+					<Link href='/admin/lessons'>
+						<ArrowLeft className='h-4 w-4' />
+					</Link>
 				</Button>
 				<div>
-					<h1 className='text-2xl sm:text-3xl font-bold tracking-tight text-foreground'>
-						Darsni Tahrirlash
+					<h1 className='text-2xl font-bold tracking-tight'>
+						{t('dashboard.editLesson') || 'Darsni Tahrirlash'}
 					</h1>
-					<p className='text-muted-foreground text-sm mt-1'>
-						Mavjud dars ma'lumotlarini yangilash va boshqarish.
+					<p className='text-muted-foreground text-sm font-mono mt-0.5'>
+						ID: {id}
 					</p>
 				</div>
 			</motion.div>
@@ -216,82 +276,93 @@ export default function EditLessonPage() {
 				onSubmit={handleSave}
 				className='grid grid-cols-1 lg:grid-cols-3 gap-6 items-start'
 			>
+				{/* ========================================== */}
+				{/* ASOSIY FORMA (Chap tomon) */}
+				{/* ========================================== */}
 				<div className='lg:col-span-2 space-y-6'>
 					<motion.div variants={itemVariants}>
-						<Card className='shadow-sm border-muted overflow-hidden'>
-							<CardHeader className='bg-muted/30 border-b pb-5'>
-								<CardTitle className='text-lg'>Asosiy ma'lumotlar</CardTitle>
+						<Card>
+							<CardHeader>
+								<div className='flex items-center gap-2'>
+									<BookOpen className='w-5 h-5 text-muted-foreground' />
+									<CardTitle className='text-lg'>
+										{t('mentors.basicInfo') || "Asosiy ma'lumotlar"}
+									</CardTitle>
+								</div>
 								<CardDescription>
 									Darsning nomi va o'quvchilarga ko'rinadigan tavsifi.
 								</CardDescription>
 							</CardHeader>
-							<CardContent className='p-6 space-y-5'>
+							<CardContent className='space-y-4'>
+								{/* Dars Mavzusi */}
 								<div className='space-y-2'>
-									<Label className='font-semibold'>
-										Dars mavzusi <span className='text-red-500'>*</span>
+									<Label htmlFor='title'>
+										{t('dashboard.lessonName') || 'Dars mavzusi'}{' '}
+										<span className='text-destructive'>*</span>
 									</Label>
 									<Input
+										id='title'
 										placeholder='Mavzuni kiriting...'
 										value={formData.title}
-										onChange={e =>
-											setFormData({ ...formData, title: e.target.value })
-										}
-										className='h-11 focus-visible:ring-primary/20'
+										onChange={e => handleChange('title', e.target.value)}
 									/>
 								</div>
 
+								{/* Dars haqida ma'lumot */}
 								<div className='space-y-2'>
-									<Label className='font-semibold'>Batafsil ma'lumot</Label>
+									<Label htmlFor='description'>Batafsil ma'lumot</Label>
 									<Textarea
+										id='description'
 										placeholder='Dars haqida qisqacha...'
-										className='min-h-[140px] resize-y focus-visible:ring-primary/20'
+										className='min-h-[120px] resize-y'
 										value={formData.description}
-										onChange={e =>
-											setFormData({ ...formData, description: e.target.value })
-										}
+										onChange={e => handleChange('description', e.target.value)}
 									/>
 								</div>
 
-								<div className='grid grid-cols-1 sm:grid-cols-2 gap-5'>
+								{/* Mentor va Limit */}
+								<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
 									<div className='space-y-2'>
-										<Label className='font-semibold'>
-											Mentor <span className='text-red-500'>*</span>
+										<Label>
+											Mentor <span className='text-destructive'>*</span>
 										</Label>
 										<Select
 											value={formData.mentor}
-											onValueChange={v =>
-												setFormData({ ...formData, mentor: v })
-											}
+											onValueChange={v => handleChange('mentor', v)}
 										>
-											<SelectTrigger className='h-11'>
+											<SelectTrigger>
 												<SelectValue placeholder='Mentorni tanlang' />
 											</SelectTrigger>
 											<SelectContent>
-												{mentors.map(m => (
-													<SelectItem key={m.id} value={m.id}>
-														{m.name}
-													</SelectItem>
-												))}
+												{mentors.length > 0 ? (
+													mentors.map(m => (
+														<SelectItem key={m.id} value={m.id}>
+															{m.name}
+														</SelectItem>
+													))
+												) : (
+													<div className='p-2 text-sm text-muted-foreground text-center'>
+														Mentorlar topilmadi
+													</div>
+												)}
 											</SelectContent>
 										</Select>
 									</div>
+
 									<div className='space-y-2'>
-										<Label className='font-semibold'>O'quvchilar limiti</Label>
-										<div className='relative'>
-											<Users className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground' />
-											<Input
-												type='number'
-												placeholder='100'
-												value={formData.maxStudents}
-												onChange={e =>
-													setFormData({
-														...formData,
-														maxStudents: e.target.value,
-													})
-												}
-												className='pl-9 h-11'
-											/>
-										</div>
+										<Label className='flex items-center gap-1.5'>
+											<Users className='w-4 h-4 text-muted-foreground' /> Limit
+											(O'quvchilar soni)
+										</Label>
+										<Input
+											type='number'
+											placeholder='Masalan: 100'
+											value={formData.maxStudents}
+											onChange={e =>
+												handleChange('maxStudents', e.target.value)
+											}
+											min='1'
+										/>
 									</div>
 								</div>
 							</CardContent>
@@ -299,21 +370,24 @@ export default function EditLessonPage() {
 					</motion.div>
 
 					<motion.div variants={itemVariants}>
-						<Card className='shadow-sm border-muted overflow-hidden'>
-							<CardHeader className='bg-muted/30 border-b pb-5'>
-								<CardTitle className='text-lg flex items-center gap-2'>
-									<Video className='w-5 h-5 text-blue-500' /> Translatsiya va
-									Manzil
-								</CardTitle>
+						<Card>
+							<CardHeader>
+								<div className='flex items-center gap-2'>
+									<Video className='w-5 h-5 text-muted-foreground' />
+									<CardTitle className='text-lg'>
+										Translatsiya va Manzil
+									</CardTitle>
+								</div>
 							</CardHeader>
-							<CardContent className='p-6 space-y-6'>
+							<CardContent className='space-y-4'>
+								{/* Formatni tanlash */}
 								<div className='space-y-2'>
-									<Label className='font-semibold'>Dars formati</Label>
+									<Label>Dars formati</Label>
 									<Select
 										value={formData.format}
-										onValueChange={v => setFormData({ ...formData, format: v })}
+										onValueChange={v => handleChange('format', v)}
 									>
-										<SelectTrigger className='max-w-xs h-11'>
+										<SelectTrigger className='sm:max-w-xs'>
 											<SelectValue />
 										</SelectTrigger>
 										<SelectContent>
@@ -330,24 +404,23 @@ export default function EditLessonPage() {
 									</Select>
 								</div>
 
+								{/* Manzil (Faqat Offline va Hybrid uchun) */}
 								{(formData.format === 'offline' ||
 									formData.format === 'hybrid') && (
 									<motion.div
 										initial={{ opacity: 0, y: -10 }}
 										animate={{ opacity: 1, y: 0 }}
-										className='space-y-2'
+										className='space-y-2 pt-2'
 									>
-										<Label className='font-semibold flex items-center gap-1.5'>
+										<Label className='flex items-center gap-1.5'>
 											<MapPin className='w-4 h-4 text-muted-foreground' /> Xona
-											nomi/raqami <span className='text-red-500'>*</span>
+											nomi/raqami <span className='text-destructive'>*</span>
 										</Label>
 										<Input
 											placeholder='Masalan: 401-xona'
 											value={formData.roomNumber}
-											onChange={e =>
-												setFormData({ ...formData, roomNumber: e.target.value })
-											}
-											className='h-11'
+											onChange={e => handleChange('roomNumber', e.target.value)}
+											className='sm:max-w-xs'
 										/>
 									</motion.div>
 								)}
@@ -356,40 +429,45 @@ export default function EditLessonPage() {
 					</motion.div>
 				</div>
 
+				{/* ========================================== */}
+				{/* YON PANEL (VAQT VA SANA - O'ng tomon) */}
+				{/* ========================================== */}
 				<div className='space-y-6 lg:sticky lg:top-24'>
 					<motion.div variants={itemVariants}>
-						<Card className='shadow-sm border-muted overflow-hidden'>
-							<CardHeader className='bg-muted/30 border-b p-4'>
-								<CardTitle className='text-base flex items-center gap-2'>
-									<Clock className='w-4 h-4 text-primary' /> Holat va Vaqt
-								</CardTitle>
+						<Card>
+							<CardHeader>
+								<div className='flex items-center gap-2'>
+									<Clock className='w-4 h-4 text-muted-foreground' />
+									<CardTitle className='text-base'>Holat va Vaqt</CardTitle>
+								</div>
 							</CardHeader>
-							<CardContent className='p-5 space-y-5'>
+							<CardContent className='space-y-4'>
+								{/* Dars Holati */}
 								<div className='space-y-2'>
-									<Label className='font-semibold'>Dars Holati</Label>
+									<Label>Dars Holati</Label>
 									<Select
 										value={formData.status}
-										onValueChange={v => setFormData({ ...formData, status: v })}
+										onValueChange={v => handleChange('status', v)}
 									>
-										<SelectTrigger className='h-11'>
+										<SelectTrigger>
 											<SelectValue />
 										</SelectTrigger>
 										<SelectContent>
 											<SelectItem
 												value='upcoming'
-												className='text-blue-600 font-medium'
+												className='font-medium text-blue-600 dark:text-blue-400'
 											>
 												Keladigan
 											</SelectItem>
 											<SelectItem
 												value='live'
-												className='text-red-600 font-medium font-bold'
+												className='font-bold text-destructive'
 											>
 												Jonli (Live)
 											</SelectItem>
 											<SelectItem
 												value='completed'
-												className='text-green-600 font-medium'
+												className='font-medium text-green-600 dark:text-green-400'
 											>
 												Tugallangan
 											</SelectItem>
@@ -397,17 +475,18 @@ export default function EditLessonPage() {
 									</Select>
 								</div>
 
+								{/* Sana Popover */}
 								<div className='space-y-2 flex flex-col'>
-									<Label className='flex items-center gap-2 font-semibold'>
+									<Label className='flex items-center gap-2'>
 										<CalendarIcon className='w-4 h-4 text-muted-foreground' />{' '}
-										Sana
+										Sana <span className='text-destructive'>*</span>
 									</Label>
 									<Popover>
 										<PopoverTrigger asChild>
 											<Button
-												variant={'outline'}
+												variant='outline'
 												className={cn(
-													'w-full justify-start text-left font-normal h-11 bg-background',
+													'w-full justify-start text-left font-normal',
 													!formData.date && 'text-muted-foreground',
 												)}
 											>
@@ -419,17 +498,14 @@ export default function EditLessonPage() {
 												)}
 											</Button>
 										</PopoverTrigger>
-										<PopoverContent className='w-auto p-0' align='start'>
+										<PopoverContent className='w-auto p-0' align='center'>
 											<Calendar
 												mode='single'
 												selected={
 													formData.date ? new Date(formData.date) : undefined
 												}
 												onSelect={d =>
-													setFormData({
-														...formData,
-														date: d ? format(d, 'yyyy-MM-dd') : '',
-													})
+													handleChange('date', d ? format(d, 'yyyy-MM-dd') : '')
 												}
 												initialFocus
 											/>
@@ -437,21 +513,18 @@ export default function EditLessonPage() {
 									</Popover>
 								</div>
 
+								{/* Vaqt (Soat:Daqiqa) */}
 								<div className='space-y-2'>
-									<Label className='flex items-center gap-2 font-semibold'>
-										<Clock className='w-4 h-4 text-muted-foreground' /> Soat
+									<Label className='flex items-center gap-2'>
+										<Clock className='w-4 h-4 text-muted-foreground' /> Soat{' '}
+										<span className='text-destructive'>*</span>
 									</Label>
 									<div className='grid grid-cols-2 gap-3'>
 										<Select
 											value={formData.time?.split(':')[0] || ''}
-											onValueChange={h =>
-												setFormData({
-													...formData,
-													time: `${h}:${formData.time?.split(':')[1] || '00'}`,
-												})
-											}
+											onValueChange={v => handleTimeChange('hour', v)}
 										>
-											<SelectTrigger className='h-11'>
+											<SelectTrigger>
 												<SelectValue placeholder='Soat' />
 											</SelectTrigger>
 											<SelectContent className='max-h-[200px]'>
@@ -465,16 +538,12 @@ export default function EditLessonPage() {
 												})}
 											</SelectContent>
 										</Select>
+
 										<Select
 											value={formData.time?.split(':')[1] || ''}
-											onValueChange={m =>
-												setFormData({
-													...formData,
-													time: `${formData.time?.split(':')[0] || '00'}:${m}`,
-												})
-											}
+											onValueChange={v => handleTimeChange('minute', v)}
 										>
-											<SelectTrigger className='h-11'>
+											<SelectTrigger>
 												<SelectValue placeholder='Min' />
 											</SelectTrigger>
 											<SelectContent>
@@ -488,53 +557,47 @@ export default function EditLessonPage() {
 									</div>
 								</div>
 
-								<div className='border-t pt-4'>
-									<div className='flex items-center justify-between p-3 rounded-lg border bg-muted/20'>
-										<div className='space-y-0.5'>
-											<Label
-												className='text-sm flex items-center gap-1.5 font-semibold cursor-pointer'
-												htmlFor='comments-toggle'
-											>
-												<MessagesSquare className='w-4 h-4 text-muted-foreground' />{' '}
-												Izohlar
-											</Label>
-											<p className='text-[10px] text-muted-foreground'>
-												O'quvchilarga chat ruxsati
-											</p>
-										</div>
-										<Switch
-											id='comments-toggle'
-											checked={formData.allowComments}
-											onCheckedChange={c =>
-												setFormData({ ...formData, allowComments: c })
-											}
-										/>
+								<div className='border-t my-4' />
+
+								{/* Izohlar Switch */}
+								<div className='flex items-center justify-between gap-4'>
+									<div className='space-y-1'>
+										<Label
+											htmlFor='comments-toggle'
+											className='flex items-center gap-1.5 cursor-pointer font-medium'
+										>
+											<MessagesSquare className='w-4 h-4 text-muted-foreground' />{' '}
+											Izohlar
+										</Label>
+										<p className='text-xs text-muted-foreground'>
+											O'quvchilarga chat ruxsati
+										</p>
 									</div>
+									<Switch
+										id='comments-toggle'
+										checked={formData.allowComments}
+										onCheckedChange={c => handleChange('allowComments', c)}
+									/>
 								</div>
 							</CardContent>
-							<CardFooter className='p-5 pt-0 flex flex-col gap-3'>
-								{errorMsg && (
-									<div className='w-full p-3 rounded-md bg-destructive/10 text-destructive text-sm font-medium flex items-start gap-2'>
-										<ShieldAlert className='w-4 h-4 shrink-0 mt-0.5' />
-										<p>{errorMsg}</p>
-									</div>
-								)}
-								{successMsg && (
-									<div className='w-full p-3 rounded-md bg-green-50 text-green-600 border border-green-200 text-sm font-medium flex items-start gap-2'>
-										<CheckCircle2 className='w-4 h-4 shrink-0 mt-0.5' />
-										<p>{successMsg}</p>
-									</div>
-								)}
+
+							{/* Saqlash tugmasi */}
+							<CardFooter>
 								<Button
-									className='w-full gap-2 h-12 font-bold shadow-sm'
-									onClick={handleSave}
-									disabled={isLoading}
+									type='submit'
+									className='w-full font-semibold'
+									disabled={
+										isLoading ||
+										!formData.title ||
+										!formData.date ||
+										!formData.time ||
+										!formData.mentor
+									}
 								>
-									{isLoading ? (
-										<Loader2 className='h-5 w-5 animate-spin' />
-									) : (
-										<Save className='h-5 w-5' />
+									{isLoading && (
+										<Loader2 className='mr-2 h-4 w-4 animate-spin' />
 									)}
+									{!isLoading && <Save className='mr-2 h-4 w-4' />}
 									O'zgarishlarni Saqlash
 								</Button>
 							</CardFooter>

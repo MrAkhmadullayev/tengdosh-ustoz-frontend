@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import api from '@/lib/api'
-import { cn } from '@/lib/utils'
+// 🔥 Markaziy utilitalar
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { cn, getErrorMessage } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import {
 	Check,
@@ -22,13 +24,13 @@ import {
 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 
 const MotionDiv = motion.div
 
 export default function MentorBroadcastPage() {
 	const router = useRouter()
-	const params = useParams()
-	const { id } = params
+	const { id } = useParams()
 
 	const [lesson, setLesson] = useState(null)
 	const [loading, setLoading] = useState(true)
@@ -53,15 +55,18 @@ export default function MentorBroadcastPage() {
 
 	// Timer
 	const [elapsed, setElapsed] = useState(0)
-	const [startTime] = useState(Date.now())
 
 	// --- API CALLS ---
 	const fetchData = useCallback(
 		async (isInitial = false) => {
 			try {
 				const [resLesson, resAttendance] = await Promise.all([
-					api.get(`/mentor/lessons/${id}`),
-					api.get(`/mentor/lessons/${id}/attendance`),
+					api
+						.get(`/mentor/lessons/${id}`)
+						.catch(() => ({ data: { success: false } })),
+					api
+						.get(`/mentor/lessons/${id}/attendance`)
+						.catch(() => ({ data: { success: false } })),
 				])
 
 				if (resLesson.data?.success) {
@@ -72,7 +77,8 @@ export default function MentorBroadcastPage() {
 					setAttendanceData(resAttendance.data)
 				}
 			} catch (error) {
-				console.error("Ma'lumotlarni yuklashda xatolik:", error)
+				if (isInitial)
+					toast.error(getErrorMessage(error, "Ma'lumotlarni yuklashda xatolik"))
 			} finally {
 				if (isInitial) setLoading(false)
 			}
@@ -82,9 +88,8 @@ export default function MentorBroadcastPage() {
 
 	// Initial fetch and Polling
 	useEffect(() => {
-		fetchData(true) // isInitial = true
+		fetchData(true)
 
-		// Fonda (background) 5 soniyada bir yangilash (Loader ko'rsatmasdan)
 		const pollInterval = setInterval(() => {
 			fetchData(false)
 		}, 5000)
@@ -92,13 +97,22 @@ export default function MentorBroadcastPage() {
 		return () => clearInterval(pollInterval)
 	}, [fetchData])
 
-	// Timer
+	// Timer (Backend'dan qaytgan startTime ga asoslanish kerak, bo'lmasa refresh bo'lganda noldan boshlanadi)
 	useEffect(() => {
+		// Agar lesson boshlanish vaqti API dan kelmagan bo'lsa, o'zimiz vaqtinchalik saqlaymiz
+		const localStart = localStorage.getItem(`lesson_${id}_start`)
+		let startTime = localStart ? parseInt(localStart, 10) : Date.now()
+
+		if (!localStart) {
+			localStorage.setItem(`lesson_${id}_start`, startTime.toString())
+		}
+
 		const timer = setInterval(() => {
 			setElapsed(Math.floor((Date.now() - startTime) / 1000))
 		}, 1000)
+
 		return () => clearInterval(timer)
-	}, [startTime])
+	}, [id])
 
 	const formatTime = seconds => {
 		const h = Math.floor(seconds / 3600)
@@ -114,9 +128,8 @@ export default function MentorBroadcastPage() {
 		}
 	}, [messages])
 
-	// Toggle attendance
+	// Toggle attendance (Optimistic Update bilan)
 	const handleToggleAttendance = async (userId, isPresent) => {
-		// UI-ni darhol o'zgartirish (Optimistic Update) yaltirashni oldini olish uchun
 		setAttendanceData(prev => {
 			if (!prev) return prev
 			const updatedStudents = prev.students.map(s =>
@@ -147,57 +160,63 @@ export default function MentorBroadcastPage() {
 				userId,
 				isPresent,
 			})
-			fetchData(false) // Fonda haqiqiy datani tortib kelish
 		} catch (error) {
-			console.error('Davomat yangilanmadi:', error)
-			fetchData(false) // Xato bo'lsa joyiga qaytarish
+			toast.error(getErrorMessage(error, 'Davomat yangilanmadi'))
+			fetchData(false) // Xato bo'lsa orqaga qaytaramiz
 		}
 	}
 
 	// Add guest
 	const handleAddGuest = async () => {
-		if (!guestForm.firstName || !guestForm.lastName) return
+		if (!guestForm.firstName || !guestForm.lastName) {
+			toast.warning('Iltimos ism va familiyani kiriting')
+			return
+		}
+
+		setGuestLoading(true)
 		try {
-			setGuestLoading(true)
 			await api.post('/mentor/attendance/guest', { lessonId: id, ...guestForm })
 			setGuestForm({ firstName: '', lastName: '', group: '' })
 			setShowGuestForm(false)
 			fetchData(false)
+			toast.success("Mehmon qo'shildi!")
 		} catch (error) {
-			console.error("Mehmon qo'shilmadi:", error)
+			toast.error(getErrorMessage(error, "Mehmon qo'shilmadi"))
 		} finally {
 			setGuestLoading(false)
 		}
 	}
 
 	// Send message
-	const handleSendMessage = async () => {
+	const handleSendMessage = async e => {
+		if (e) e.preventDefault()
 		if (!inputMessage.trim() || sendingMessage) return
 
-		// Optimistic UI update
+		const currentInput = inputMessage.trim()
 		const newMessage = {
-			_id: Date.now(),
+			_id: Date.now().toString(),
 			senderId: { firstName: 'Siz', lastName: '', role: 'mentor' },
-			text: inputMessage.trim(),
+			text: currentInput,
 			createdAt: new Date().toISOString(),
 		}
+
 		setMessages(prev => [...prev, newMessage])
-		const currentInput = inputMessage
 		setInputMessage('')
 
 		try {
 			setSendingMessage(true)
 			const res = await api.post(`/mentor/lessons/${id}/message`, {
-				text: currentInput.trim(),
+				text: currentInput,
 			})
-			if (!res.data.success) {
-				fetchData(false) // Xatolik bo'lsa serverdagi haqiqiy chatni yuklash
+			if (!res.data?.success) {
+				throw new Error('API xatosi')
 			}
 		} catch (error) {
-			console.error('Xabar yuborishda xatolik:', error)
+			toast.error(getErrorMessage(error, 'Xabar yuborishda xatolik'))
 			fetchData(false)
 		} finally {
 			setSendingMessage(false)
+			document.getElementById('chat-input')?.focus()
 		}
 	}
 
@@ -206,19 +225,21 @@ export default function MentorBroadcastPage() {
 		if (!confirm('Haqiqatan ham darsni yakunlashni xohlaysizmi?')) return
 		try {
 			await api.patch(`/mentor/lessons/${id}/status`, { status: 'completed' })
+			localStorage.removeItem(`lesson_${id}_start`) // Taymerni tozalaymiz
+			toast.success('Dars yakunlandi')
 			router.push('/mentor/lessons')
 		} catch (error) {
-			console.error('Dars yakunlanmadi:', error)
-			alert(
-				"Darsni yakunlashda xatolik yuz berdi. Iltimos qayta urinib ko'ring.",
+			toast.error(
+				getErrorMessage(error, 'Darsni yakunlashda xatolik yuz berdi.'),
 			)
 		}
 	}
 
+	// UI: Loading Skeleton
 	if (loading) {
 		return (
-			<div className='fixed inset-0 bg-background flex flex-col z-50 overflow-hidden'>
-				<div className='h-16 px-6 border-b flex items-center justify-between'>
+			<div className='fixed inset-0 bg-background flex flex-col z-50 overflow-hidden animate-pulse'>
+				<div className='h-16 px-6 border-b flex items-center justify-between bg-card'>
 					<Skeleton className='h-6 w-48' />
 					<Skeleton className='h-10 w-32 rounded-xl' />
 				</div>
@@ -237,49 +258,51 @@ export default function MentorBroadcastPage() {
 
 	return (
 		<div className='fixed inset-0 bg-background flex flex-col z-50 overflow-hidden'>
-			{/* --- TOP BAR --- */}
-			<div className='h-16 px-4 md:px-6 flex items-center justify-between border-b bg-card shrink-0 shadow-sm z-10'>
+			{/* ========================================== */}
+			{/* 🏷️ TOP BAR */}
+			{/* ========================================== */}
+			<div className='h-16 px-4 md:px-6 flex items-center justify-between border-b bg-card shrink-0 z-10'>
 				<div className='flex items-center gap-3 md:gap-4 overflow-hidden'>
-					<Badge className='bg-red-500 text-white hover:bg-red-600 border-0 px-2.5 py-1 animate-pulse font-bold tracking-widest text-[10px] md:text-xs shrink-0 rounded-md'>
+					<Badge
+						variant='destructive'
+						className='animate-pulse font-bold tracking-widest text-[10px] uppercase rounded-sm px-2'
+					>
 						JONLI EFIR
 					</Badge>
 					<h1 className='font-bold text-foreground truncate max-w-[200px] md:max-w-[400px] text-base md:text-lg'>
 						{lesson?.title || 'Dars nomi'}
 					</h1>
-					<div className='hidden md:flex items-center gap-2 px-3 py-1.5 bg-muted rounded-full text-xs font-mono text-muted-foreground font-semibold'>
-						<Clock className='w-3.5 h-3.5 text-primary' />
-						{formatTime(elapsed)}
+					<div className='hidden md:flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md text-xs font-mono text-muted-foreground font-semibold'>
+						<Clock className='w-3.5 h-3.5' /> {formatTime(elapsed)}
 					</div>
-					<div className='hidden md:flex items-center gap-2 px-3 py-1.5 bg-muted rounded-full text-xs font-semibold text-muted-foreground'>
-						<Users className='w-3.5 h-3.5 text-primary' />
+					<div className='hidden md:flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md text-xs font-semibold text-muted-foreground'>
+						<Users className='w-3.5 h-3.5' />{' '}
 						{attendanceData?.summary?.total || 0} ishtirokchi
 					</div>
 				</div>
 				<Button
 					onClick={handleEndLesson}
 					variant='destructive'
-					className='rounded-xl gap-2 font-bold shadow-sm h-9 md:h-10'
+					className='gap-2 font-bold shadow-sm h-9 md:h-10'
 				>
-					<Square className='w-4 h-4 fill-current' />{' '}
+					<Square className='w-4 h-4 fill-current' />
 					<span className='hidden md:inline'>Yakunlash</span>
 				</Button>
 			</div>
 
-			{/* --- MAIN CONTENT --- */}
-			<div className='flex-1 flex flex-col md:flex-row overflow-hidden bg-muted/20'>
-				{/* --- LEFT: ATTENDANCE PANEL --- */}
-				<div className='flex-1 flex flex-col bg-background md:border-r border-border'>
-					{/* Header */}
-					<div className='p-4 md:p-5 border-b bg-card flex items-center justify-between shrink-0 shadow-sm z-10'>
+			<div className='flex-1 flex flex-col md:flex-row overflow-hidden bg-muted/10'>
+				{/* ========================================== */}
+				{/* 📋 CHAP PANEL: DAVOMAT */}
+				{/* ========================================== */}
+				<div className='flex-1 flex flex-col bg-card md:border-r border-border'>
+					<div className='p-4 border-b flex items-center justify-between shrink-0 z-10'>
 						<div className='flex items-center gap-2.5'>
-							<div className='bg-primary/10 p-2 rounded-lg'>
-								<UserCheck className='w-5 h-5 text-primary' />
+							<div className='bg-muted p-2 rounded-md'>
+								<UserCheck className='w-4 h-4 text-muted-foreground' />
 							</div>
 							<div>
-								<h2 className='font-bold text-foreground leading-none'>
-									Davomat
-								</h2>
-								<span className='text-xs text-muted-foreground'>
+								<h2 className='font-bold text-sm leading-none'>Davomat</h2>
+								<span className='text-[10px] text-muted-foreground'>
 									O'quvchilarni belgilang
 								</span>
 							</div>
@@ -287,54 +310,51 @@ export default function MentorBroadcastPage() {
 						<Button
 							size='sm'
 							variant='secondary'
-							className='rounded-lg gap-2 text-xs font-semibold'
+							className='gap-2 text-xs'
 							onClick={() => setShowGuestForm(!showGuestForm)}
 						>
-							<UserPlus className='w-4 h-4 text-primary' />{' '}
-							<span className='hidden sm:inline'>Mehmon</span>
+							<UserPlus className='w-4 h-4' />{' '}
+							<span className='hidden sm:inline'>Mehmon qo'shish</span>
 						</Button>
 					</div>
 
-					{/* Summary Cards */}
+					{/* Davomat Statistikasi */}
 					{attendanceData && (
-						<div className='grid grid-cols-3 gap-0 border-b bg-card shrink-0'>
-							<div className='p-4 text-center border-r'>
-								<p className='text-2xl font-black text-blue-600'>
+						<div className='grid grid-cols-3 gap-0 border-b shrink-0 bg-muted/30'>
+							<div className='p-3 text-center border-r'>
+								<p className='text-xl font-bold text-primary'>
 									{attendanceData.summary?.total || 0}
 								</p>
-								<p className='text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5'>
+								<p className='text-[10px] text-muted-foreground font-bold uppercase tracking-wider'>
 									Jami
 								</p>
 							</div>
-							<div className='p-4 text-center border-r'>
-								<p className='text-2xl font-black text-emerald-600'>
+							<div className='p-3 text-center border-r'>
+								<p className='text-xl font-bold text-green-600'>
 									{attendanceData.summary?.present || 0}
 								</p>
-								<p className='text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5'>
+								<p className='text-[10px] text-muted-foreground font-bold uppercase tracking-wider'>
 									Kelgan
 								</p>
 							</div>
-							<div className='p-4 text-center'>
-								<p className='text-2xl font-black text-red-600'>
+							<div className='p-3 text-center'>
+								<p className='text-xl font-bold text-destructive'>
 									{attendanceData.summary?.absent || 0}
 								</p>
-								<p className='text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5'>
+								<p className='text-[10px] text-muted-foreground font-bold uppercase tracking-wider'>
 									Kelmagan
 								</p>
 							</div>
 						</div>
 					)}
 
-					{/* Guest Form */}
+					{/* Mehmon Qo'shish Formasi */}
 					{showGuestForm && (
 						<MotionDiv
 							initial={{ height: 0, opacity: 0 }}
 							animate={{ height: 'auto', opacity: 1 }}
-							className='p-4 bg-muted/50 border-b space-y-3 shrink-0 overflow-hidden'
+							className='p-4 bg-muted/20 border-b space-y-3 shrink-0 overflow-hidden'
 						>
-							<p className='text-xs font-bold text-muted-foreground uppercase tracking-wider'>
-								Yangi talaba qo'shish
-							</p>
 							<div className='grid grid-cols-1 sm:grid-cols-3 gap-3'>
 								<Input
 									placeholder='Ism'
@@ -342,7 +362,7 @@ export default function MentorBroadcastPage() {
 									onChange={e =>
 										setGuestForm({ ...guestForm, firstName: e.target.value })
 									}
-									className='rounded-lg bg-background'
+									className='bg-background h-9'
 								/>
 								<Input
 									placeholder='Familiya'
@@ -350,7 +370,7 @@ export default function MentorBroadcastPage() {
 									onChange={e =>
 										setGuestForm({ ...guestForm, lastName: e.target.value })
 									}
-									className='rounded-lg bg-background'
+									className='bg-background h-9'
 								/>
 								<Input
 									placeholder='Guruh'
@@ -358,17 +378,17 @@ export default function MentorBroadcastPage() {
 									onChange={e =>
 										setGuestForm({ ...guestForm, group: e.target.value })
 									}
-									className='rounded-lg bg-background'
+									className='bg-background h-9'
 								/>
 							</div>
-							<div className='flex gap-2 pt-1'>
+							<div className='flex gap-2'>
 								<Button
 									size='sm'
 									onClick={handleAddGuest}
 									disabled={
 										guestLoading || !guestForm.firstName || !guestForm.lastName
 									}
-									className='rounded-lg gap-2 shadow-sm'
+									className='gap-2 w-full sm:w-auto'
 								>
 									{guestLoading ? (
 										<Loader2 className='w-3.5 h-3.5 animate-spin' />
@@ -379,49 +399,51 @@ export default function MentorBroadcastPage() {
 								</Button>
 								<Button
 									size='sm'
-									variant='outline'
+									variant='ghost'
 									onClick={() => setShowGuestForm(false)}
 								>
-									Bekor
+									Bekor qilish
 								</Button>
 							</div>
 						</MotionDiv>
 					)}
 
-					{/* Student List */}
-					<div className='flex-1 overflow-y-auto p-3 sm:p-4 bg-muted/10'>
+					{/* O'quvchilar ro'yxati */}
+					<div className='flex-1 overflow-y-auto p-4 custom-scrollbar'>
 						<div className='grid gap-2'>
 							{attendanceData?.students?.map(s => (
 								<div
 									key={s.id}
-									className='flex items-center justify-between p-3 sm:p-4 rounded-xl bg-card border shadow-sm hover:shadow-md transition-all group'
+									className='flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors group'
 								>
 									<div className='flex items-center gap-3 flex-1 min-w-0'>
-										<div
-											className={cn(
-												'w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black shrink-0 transition-colors',
-												s.isPresent
-													? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
-													: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
-											)}
-										>
-											{s.firstName?.[0]}
-											{s.lastName?.[0]}
-										</div>
+										<Avatar className='h-9 w-9 border shrink-0'>
+											<AvatarFallback
+												className={cn(
+													'text-xs font-bold uppercase',
+													s.isPresent
+														? 'bg-green-50 text-green-700'
+														: 'bg-red-50 text-destructive',
+												)}
+											>
+												{s.firstName?.[0]}
+												{s.lastName?.[0]}
+											</AvatarFallback>
+										</Avatar>
 										<div className='min-w-0'>
-											<p className='font-bold text-sm sm:text-base text-foreground truncate'>
+											<p className='font-semibold text-sm text-foreground truncate'>
 												{s.firstName} {s.lastName}
 												{s.isGuest && (
 													<Badge
 														variant='secondary'
-														className='ml-2 text-[10px] bg-blue-100 text-blue-700 border-none font-bold py-0'
+														className='ml-2 text-[9px] uppercase'
 													>
 														Mehmon
 													</Badge>
 												)}
 											</p>
-											<p className='text-xs text-muted-foreground font-medium mt-0.5'>
-												{s.group || 'Guruhsiz'}
+											<p className='text-xs text-muted-foreground mt-0.5'>
+												{s.group || 'Guruh kiritilmagan'}
 											</p>
 										</div>
 									</div>
@@ -430,21 +452,21 @@ export default function MentorBroadcastPage() {
 										<button
 											onClick={() => handleToggleAttendance(s.id, !s.isPresent)}
 											className={cn(
-												'w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all duration-200 shrink-0 border-2',
+												'h-10 w-10 rounded-md flex items-center justify-center transition-colors border shrink-0',
 												s.isPresent
-													? 'bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/20 hover:bg-emerald-600'
-													: 'bg-transparent border-muted hover:border-red-200 hover:bg-red-50 text-muted-foreground hover:text-red-500 dark:hover:bg-red-500/10',
+													? 'bg-green-600 border-green-600 text-white'
+													: 'bg-transparent border-muted hover:border-destructive hover:text-destructive text-muted-foreground',
 											)}
 										>
 											{s.isPresent ? (
-												<Check className='w-5 h-5 sm:w-6 sm:h-6' />
+												<Check className='w-5 h-5' />
 											) : (
-												<X className='w-5 h-5 sm:w-6 sm:h-6' />
+												<X className='w-5 h-5' />
 											)}
 										</button>
 									) : (
-										<div className='w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center bg-emerald-500 text-white shadow-md'>
-											<Check className='w-5 h-5 sm:w-6 sm:h-6' />
+										<div className='h-10 w-10 rounded-md flex items-center justify-center bg-green-600 text-white'>
+											<Check className='w-5 h-5' />
 										</div>
 									)}
 								</div>
@@ -452,10 +474,8 @@ export default function MentorBroadcastPage() {
 
 							{(!attendanceData?.students ||
 								attendanceData.students.length === 0) && (
-								<div className='flex flex-col items-center justify-center py-16 text-muted-foreground text-center'>
-									<div className='bg-muted p-4 rounded-full mb-4'>
-										<Users className='w-8 h-8 opacity-50' />
-									</div>
+								<div className='flex flex-col items-center justify-center py-16 text-muted-foreground'>
+									<Users className='w-8 h-8 opacity-20 mb-3' />
 									<p className='text-sm font-medium'>
 										Bu darsga hech kim yozilmagan
 									</p>
@@ -465,29 +485,29 @@ export default function MentorBroadcastPage() {
 					</div>
 				</div>
 
-				{/* --- RIGHT: CHAT PANEL --- */}
-				<div className='w-full md:w-[380px] lg:w-[450px] flex flex-col bg-card border-l shrink-0 h-[40vh] md:h-auto'>
-					{/* Chat Header */}
-					<div className='p-4 border-b flex items-center gap-3 shrink-0 bg-muted/30'>
-						<div className='bg-primary/10 p-2 rounded-lg'>
-							<MessageSquare className='w-4 h-4 text-primary' />
+				{/* ========================================== */}
+				{/* 💬 O'NG PANEL: CHAT */}
+				{/* ========================================== */}
+				<div className='w-full md:w-[380px] lg:w-[450px] flex flex-col bg-card md:border-l shrink-0 h-[40vh] md:h-auto'>
+					<div className='p-4 border-b flex items-center justify-between shrink-0 bg-muted/10'>
+						<div className='flex items-center gap-2'>
+							<MessageSquare className='w-4 h-4 text-muted-foreground' />
+							<h2 className='font-bold text-sm'>Jonli Chat</h2>
 						</div>
-						<h2 className='font-bold text-base flex-1'>Jonli Chat</h2>
-						<Badge variant='secondary' className='font-mono'>
+						<Badge variant='outline' className='font-mono text-xs'>
 							{messages.length}
 						</Badge>
 					</div>
 
-					{/* Messages */}
 					<div
 						ref={scrollRef}
-						className='flex-1 overflow-y-auto p-4 bg-muted/10 custom-scrollbar'
+						className='flex-1 overflow-y-auto p-4 custom-scrollbar'
 					>
 						<div className='space-y-4'>
 							<div className='text-center sticky top-0 z-10'>
 								<Badge
-									variant='outline'
-									className='text-[10px] uppercase tracking-widest font-bold bg-background/80 backdrop-blur-sm'
+									variant='secondary'
+									className='text-[10px] uppercase tracking-wider opacity-80 backdrop-blur-sm'
 								>
 									Dars boshlandi
 								</Badge>
@@ -509,7 +529,7 @@ export default function MentorBroadcastPage() {
 
 								return (
 									<MotionDiv
-										initial={{ opacity: 0, y: 10 }}
+										initial={{ opacity: 0, y: 5 }}
 										animate={{ opacity: 1, y: 0 }}
 										key={msg._id || idx}
 										className={cn(
@@ -517,20 +537,20 @@ export default function MentorBroadcastPage() {
 											isMentor ? 'items-end' : 'items-start',
 										)}
 									>
-										<div className='flex items-baseline gap-2 px-1'>
-											<span className='text-[11px] font-bold text-muted-foreground'>
+										<div className='flex items-center gap-2 px-1'>
+											<span className='text-[11px] font-medium text-muted-foreground'>
 												{senderName}
 											</span>
-											<span className='text-[9px] text-muted-foreground/50 font-mono'>
+											<span className='text-[9px] text-muted-foreground opacity-50 font-mono'>
 												{time}
 											</span>
 										</div>
 										<div
 											className={cn(
-												'px-4 py-2.5 rounded-2xl text-sm max-w-[85%] break-words shadow-sm',
+												'px-3 py-2 text-sm max-w-[85%] break-words rounded-xl',
 												isMentor
 													? 'bg-primary text-primary-foreground rounded-tr-sm'
-													: 'bg-background border rounded-tl-sm',
+													: 'bg-muted text-foreground rounded-tl-sm',
 											)}
 										>
 											{msg.text}
@@ -541,36 +561,37 @@ export default function MentorBroadcastPage() {
 
 							{messages.length === 0 && (
 								<div className='flex flex-col items-center justify-center h-full text-muted-foreground py-12'>
-									<MessageSquare className='w-8 h-8 mb-3 opacity-20' />
+									<MessageSquare className='w-8 h-8 mb-2 opacity-20' />
 									<p className='text-xs font-medium'>Xabarlar mavjud emas</p>
 								</div>
 							)}
 						</div>
 					</div>
 
-					{/* Input Area */}
-					<div className='p-4 border-t bg-card shrink-0'>
-						<div className='flex gap-2 relative items-end'>
+					{/* Chat Input */}
+					<div className='p-3 border-t shrink-0 bg-muted/10'>
+						<form onSubmit={handleSendMessage} className='flex gap-2'>
 							<Input
+								id='chat-input'
 								placeholder='Xabar yozing...'
-								className='bg-muted/50 border-transparent focus-visible:ring-primary focus-visible:bg-background rounded-xl h-11 pr-12'
+								className='bg-background'
 								value={inputMessage}
 								onChange={e => setInputMessage(e.target.value)}
-								onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
+								autoComplete='off'
 							/>
 							<Button
+								type='submit'
 								size='icon'
-								className='h-9 w-9 rounded-lg absolute right-1 top-1 shadow-sm'
-								onClick={handleSendMessage}
 								disabled={sendingMessage || !inputMessage.trim()}
+								className='shrink-0'
 							>
 								{sendingMessage ? (
 									<Loader2 className='w-4 h-4 animate-spin' />
 								) : (
-									<Send className='w-4 h-4 -ml-0.5 mt-0.5' />
+									<Send className='w-4 h-4' />
 								)}
 							</Button>
-						</div>
+						</form>
 					</div>
 				</div>
 			</div>

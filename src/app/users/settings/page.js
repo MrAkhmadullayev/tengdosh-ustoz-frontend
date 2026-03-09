@@ -26,10 +26,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import api from '@/lib/api'
+import { useTranslation } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import {
 	Check,
-	Globe,
 	Loader2,
 	Monitor,
 	Moon,
@@ -42,17 +42,18 @@ import {
 	X,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 export default function SettingsPage() {
+	const { t } = useTranslation()
+	const { theme, setTheme } = useTheme()
+
 	const [user, setUser] = useState(null)
 	const [loading, setLoading] = useState(true)
 	const [saving, setSaving] = useState(false)
 	const [saved, setSaved] = useState(false)
 	const [form, setForm] = useState({})
-	const { theme, setTheme } = useTheme()
 
-	// Mentor-specific states
 	const [languages, setLanguages] = useState([])
 	const [newLangName, setNewLangName] = useState('')
 	const [newLangLevel, setNewLangLevel] = useState('B2')
@@ -61,6 +62,27 @@ export default function SettingsPage() {
 	const [newSkill, setNewSkill] = useState('')
 	const [schedule, setSchedule] = useState([])
 
+	const daysList = useMemo(
+		() => [
+			{ key: 'monday', label: t('days.monday') },
+			{ key: 'tuesday', label: t('days.tuesday') },
+			{ key: 'wednesday', label: t('days.wednesday') },
+			{ key: 'thursday', label: t('days.thursday') },
+			{ key: 'friday', label: t('days.friday') },
+			{ key: 'saturday', label: t('days.saturday') },
+			{ key: 'sunday', label: t('days.sunday') },
+		],
+		[t],
+	)
+	const roleLabel = useMemo(
+		() => ({
+			admin: t('auth.roleAdmin'),
+			mentor: t('auth.roleMentor'),
+			student: t('auth.roleStudent'),
+		}),
+		[t],
+	)
+
 	const fetchUser = useCallback(async () => {
 		try {
 			const res = await api.get('/auth/me')
@@ -68,7 +90,6 @@ export default function SettingsPage() {
 				const d = res.data.user
 				const [gPref, gSuff] = (d.group || '-').split('-')
 
-				// Telefon raqamdan +998 ni olib tashlash (faqat 9 xonali qismini saqlaymiz)
 				let phoneStr = d.phoneNumber || ''
 				phoneStr = phoneStr.replace(/\D/g, '')
 				if (phoneStr.startsWith('998')) {
@@ -103,80 +124,28 @@ export default function SettingsPage() {
 		fetchUser()
 	}, [fetchUser])
 
-	const updateField = (key, value) => {
+	const updateField = useCallback((key, value) => {
 		setForm(prev => ({ ...prev, [key]: value }))
 		setSaved(false)
-	}
+	}, [])
 
-	// --- Phone Number Handlers ---
-	const handlePhoneChange = val => {
-		// Faqat raqamlarni olib qolish va max 9 ta raqam
-		let digits = val.replace(/\D/g, '').substring(0, 9)
-		updateField('phoneNumber', digits)
-	}
+	const handlePhoneChange = useCallback(
+		val => {
+			let digits = val.replace(/\D/g, '').substring(0, 9)
+			updateField('phoneNumber', digits)
+		},
+		[updateField],
+	)
 
-	const formatPhoneDisplay = digits => {
+	const formatPhoneDisplay = useCallback(digits => {
 		if (!digits) return ''
 		let res = digits.substring(0, 2)
 		if (digits.length > 2) res += ' ' + digits.substring(2, 5)
 		if (digits.length > 5) res += ' ' + digits.substring(5, 7)
 		if (digits.length > 7) res += ' ' + digits.substring(7, 9)
 		return res
-	}
+	}, [])
 
-	// --- Array field helpers ---
-	const addLanguage = () => {
-		if (newLangName.trim()) {
-			setLanguages([
-				...languages,
-				{
-					lang: newLangName.trim(),
-					level: newLangLevel,
-					isNative: newLangNative,
-				},
-			])
-			setNewLangName('')
-			setNewLangNative(false)
-			setSaved(false)
-		}
-	}
-
-	const removeLanguage = i => {
-		setLanguages(languages.filter((_, idx) => idx !== i))
-		setSaved(false)
-	}
-
-	const addSkill = () => {
-		if (newSkill.trim() && !skills.includes(newSkill.trim())) {
-			setSkills([...skills, newSkill.trim()])
-			setNewSkill('')
-			setSaved(false)
-		}
-	}
-
-	const removeSkill = s => {
-		setSkills(skills.filter(x => x !== s))
-		setSaved(false)
-	}
-
-	const addScheduleRow = () => {
-		setSchedule([...schedule, { day: 'Dushanba', from: '09:00', to: '18:00' }])
-		setSaved(false)
-	}
-
-	const removeScheduleRow = i => {
-		setSchedule(schedule.filter((_, idx) => idx !== i))
-		setSaved(false)
-	}
-
-	const handleScheduleChange = (i, field, val) => {
-		const n = [...schedule]
-		n[i][field] = val
-		setSchedule(n)
-		setSaved(false)
-	}
-
-	// --- Save Handler ---
 	const handleSave = async () => {
 		try {
 			setSaving(true)
@@ -188,15 +157,9 @@ export default function SettingsPage() {
 			const fullPhoneNumber = form.phoneNumber ? `+998${form.phoneNumber}` : ''
 
 			const payload = {
-				firstName: form.firstName,
-				lastName: form.lastName,
-				phoneNumber: fullPhoneNumber,
-				about: form.about,
-				course: form.course,
+				...form,
 				group: finalGroup,
-				specialty: form.specialty,
-				experience: form.experience,
-				language: form.language,
+				phoneNumber: fullPhoneNumber,
 				languages,
 				skills,
 				schedule,
@@ -208,22 +171,16 @@ export default function SettingsPage() {
 			}
 		} catch (e) {
 			console.error(e)
-			alert("Ma'lumotlarni saqlashda xatolik yuz berdi")
+			alert(t('settings.saveError'))
 		} finally {
 			setSaving(false)
 		}
 	}
 
 	const themes = [
-		{ key: 'light', label: "Yorug'", icon: Sun },
-		{ key: 'dark', label: "Qorong'i", icon: Moon },
-		{ key: 'system', label: 'Tizim', icon: Monitor },
-	]
-
-	const langs = [
-		{ key: 'uz', label: "O'zbek tili", flag: '🇺🇿' },
-		{ key: 'ru', label: 'Русский', flag: '🇷🇺' },
-		{ key: 'en', label: 'English', flag: '🇬🇧' },
+		{ key: 'light', label: t('settings.light'), icon: Sun },
+		{ key: 'dark', label: t('settings.dark'), icon: Moon },
+		{ key: 'system', label: t('settings.systemTheme'), icon: Monitor },
 	]
 
 	if (loading) {
@@ -245,59 +202,56 @@ export default function SettingsPage() {
 		<div className='w-full max-w-4xl mx-auto space-y-6 pb-12'>
 			<div className='flex flex-col gap-1.5 pb-2'>
 				<h1 className='text-2xl sm:text-3xl font-bold tracking-tight'>
-					Sozlamalar
+					{t('settings.title')}
 				</h1>
 				<p className='text-muted-foreground text-sm'>
-					Shaxsiy ma&apos;lumotlaringiz va tizim sozlamalari.
+					{t('settings.description')}
 				</p>
 			</div>
 
 			<Tabs defaultValue='profile' className='w-full'>
 				<TabsList className='grid w-full sm:w-[400px] grid-cols-2 mb-8'>
 					<TabsTrigger value='profile' className='gap-2'>
-						<User className='h-4 w-4' /> Profil
+						<User className='h-4 w-4' /> {t('profile.title')}
 					</TabsTrigger>
 					<TabsTrigger value='system' className='gap-2'>
-						<Settings2 className='h-4 w-4' /> Tizim
+						<Settings2 className='h-4 w-4' /> {t('settings.system')}
 					</TabsTrigger>
 				</TabsList>
 
-				{/* ===== PROFILE TAB ===== */}
 				<TabsContent value='profile' className='space-y-6 outline-none'>
 					<Card>
 						<CardHeader>
-							<CardTitle>Profil ma&apos;lumotlari</CardTitle>
-							<CardDescription>
-								Shaxsiy ma&apos;lumotlaringizni tahrirlang va yangilang.
-							</CardDescription>
+							<CardTitle>{t('settings.profileInfo')}</CardTitle>
+							<CardDescription>{t('settings.profileInfoDesc')}</CardDescription>
 						</CardHeader>
 						<CardContent className='space-y-6'>
-							{/* Ism, Familiya */}
 							<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
 								<div className='space-y-2'>
-									<Label htmlFor='firstName'>Ism</Label>
+									<Label htmlFor='firstName'>{t('settings.firstName')}</Label>
 									<Input
 										id='firstName'
 										value={form.firstName}
 										onChange={e => updateField('firstName', e.target.value)}
-										placeholder='Ismingizni kiriting'
+										placeholder={t('settings.firstNamePlaceholder')}
 									/>
 								</div>
 								<div className='space-y-2'>
-									<Label htmlFor='lastName'>Familiya</Label>
+									<Label htmlFor='lastName'>{t('settings.lastName')}</Label>
 									<Input
 										id='lastName'
 										value={form.lastName}
 										onChange={e => updateField('lastName', e.target.value)}
-										placeholder='Familiyangizni kiriting'
+										placeholder={t('settings.lastNamePlaceholder')}
 									/>
 								</div>
 							</div>
 
-							{/* Telefon va Kurs */}
 							<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
 								<div className='space-y-2'>
-									<Label htmlFor='phoneNumber'>Telefon raqam</Label>
+									<Label htmlFor='phoneNumber'>
+										{t('settings.phoneNumber')}
+									</Label>
 									<div className='flex rounded-md shadow-sm'>
 										<span className='inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm'>
 											+998
@@ -313,41 +267,38 @@ export default function SettingsPage() {
 									</div>
 								</div>
 
-								{/* Kurs — faqat mentor & student uchun */}
 								{(role === 'student' || role === 'mentor') && (
 									<div className='space-y-2'>
-										<Label>Kurs</Label>
+										<Label>{t('settings.selectCourse')}</Label>
 										<Select
 											value={form.course}
 											onValueChange={val => updateField('course', val)}
 										>
 											<SelectTrigger>
-												<SelectValue placeholder='Kursni tanlang' />
+												<SelectValue placeholder={t('settings.selectCourse')} />
 											</SelectTrigger>
 											<SelectContent>
 												<SelectGroup>
-													<SelectLabel>Bakalavr</SelectLabel>
-													<SelectItem value='1-kurs (Bakalavr)'>
-														1-kurs
-													</SelectItem>
-													<SelectItem value='2-kurs (Bakalavr)'>
-														2-kurs
-													</SelectItem>
-													<SelectItem value='3-kurs (Bakalavr)'>
-														3-kurs
-													</SelectItem>
-													<SelectItem value='4-kurs (Bakalavr)'>
-														4-kurs
-													</SelectItem>
+													<SelectLabel>{t('settings.bachelor')}</SelectLabel>
+													{[1, 2, 3, 4].map(c => (
+														<SelectItem
+															key={c}
+															value={`${c}-kurs (${t('settings.bachelor')})`}
+														>
+															{c}-kurs
+														</SelectItem>
+													))}
 												</SelectGroup>
 												<SelectGroup>
-													<SelectLabel>Magistratura</SelectLabel>
-													<SelectItem value='1-kurs (Magistratura)'>
-														1-kurs (Mag.)
-													</SelectItem>
-													<SelectItem value='2-kurs (Magistratura)'>
-														2-kurs (Mag.)
-													</SelectItem>
+													<SelectLabel>{t('settings.master')}</SelectLabel>
+													{[1, 2].map(c => (
+														<SelectItem
+															key={c}
+															value={`${c}-kurs (${t('settings.master')})`}
+														>
+															{c}-kurs
+														</SelectItem>
+													))}
 												</SelectGroup>
 											</SelectContent>
 										</Select>
@@ -355,11 +306,10 @@ export default function SettingsPage() {
 								)}
 							</div>
 
-							{/* Guruh va Yo'nalish */}
 							{(role === 'student' || role === 'mentor') && (
 								<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
 									<div className='space-y-2'>
-										<Label>Guruh</Label>
+										<Label>{t('profile.group')}</Label>
 										<div className='flex items-center gap-2'>
 											<Input
 												value={form.groupPrefix}
@@ -381,42 +331,43 @@ export default function SettingsPage() {
 										</div>
 									</div>
 
-									{/* Mentor uchun: Yo'nalish */}
 									{role === 'mentor' && (
 										<div className='space-y-2'>
-											<Label htmlFor='specialty'>Yo&apos;nalish</Label>
+											<Label htmlFor='specialty'>
+												{t('profile.specialty')}
+											</Label>
 											<Input
 												id='specialty'
 												value={form.specialty}
 												onChange={e => updateField('specialty', e.target.value)}
-												placeholder='masalan: Frontend'
+												placeholder={t('settings.specialtyPlaceholder')}
 											/>
 										</div>
 									)}
 								</div>
 							)}
 
-							{/* Mentor: Tajriba */}
 							{role === 'mentor' && (
 								<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
 									<div className='space-y-2'>
-										<Label htmlFor='experience'>Tajriba (yil)</Label>
+										<Label htmlFor='experience'>
+											{t('settings.experienceYears')}
+										</Label>
 										<Input
 											id='experience'
 											type='number'
 											min='0'
 											value={form.experience}
 											onChange={e => updateField('experience', e.target.value)}
-											placeholder='masalan: 2'
+											placeholder={t('settings.experiencePlaceholder')}
 										/>
 									</div>
 								</div>
 							)}
 
-							{/* About */}
 							<div className='space-y-2'>
 								<Label htmlFor='about' className='flex justify-between'>
-									O&apos;zingiz haqingizda
+									{t('settings.aboutYou')}
 									<span className='text-xs text-muted-foreground'>
 										{(form.about || '').length} / 500
 									</span>
@@ -427,32 +378,25 @@ export default function SettingsPage() {
 									value={form.about}
 									onChange={e => updateField('about', e.target.value)}
 									maxLength={500}
-									placeholder="O'zingiz haqingizda qisqacha ma'lumot qoldiring..."
+									placeholder={t('settings.aboutPlaceholder')}
 								/>
 							</div>
 
-							{/* Role badge */}
 							<div className='flex items-center gap-2 pt-2 text-sm text-muted-foreground'>
-								<span>Rol:</span>
+								<span>{t('settings.role')}:</span>
 								<Badge variant='outline' className='capitalize'>
-									{role}
+									{roleLabel[role] || role}
 								</Badge>
-								{user?.username && (
-									<>
-										<span className='mx-1 opacity-50'>|</span>
-										<span>@{user.username}</span>
-									</>
-								)}
 							</div>
 						</CardContent>
 						<CardFooter className='border-t px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4 bg-muted/20'>
 							<div className='text-sm text-muted-foreground w-full sm:w-auto text-center sm:text-left'>
 								{saved ? (
 									<span className='text-emerald-600 font-medium flex items-center justify-center sm:justify-start gap-1'>
-										<Check className='w-4 h-4' /> Muvaffaqiyatli saqlandi!
+										<Check className='w-4 h-4' /> {t('settings.saveSuccess')}
 									</span>
 								) : (
-									"So'nggi o'zgarishlarni saqlashni unutmang."
+									t('settings.saveReminder')
 								)}
 							</div>
 							<Button
@@ -465,28 +409,37 @@ export default function SettingsPage() {
 								) : (
 									<Save className='h-4 w-4' />
 								)}
-								Saqlash
+								{t('common.save')}
 							</Button>
 						</CardFooter>
 					</Card>
 
-					{/* ===== MENTOR TABLARI: Tillar, Ko'nikmalar, Jadval ===== */}
 					{role === 'mentor' && (
 						<div className='space-y-6'>
-							{/* Tillar */}
 							<Card>
 								<CardHeader>
-									<CardTitle className='text-base'>Tillarni bilishi</CardTitle>
+									<CardTitle className='text-base'>
+										{t('settings.languages')}
+									</CardTitle>
 								</CardHeader>
 								<CardContent className='space-y-4'>
 									<div className='flex flex-col sm:flex-row gap-3'>
 										<Input
 											className='flex-1'
-											placeholder='Til nomi (mas: Ingliz tili)'
+											placeholder={t('settings.languagePlaceholder')}
 											value={newLangName}
 											onChange={e => setNewLangName(e.target.value)}
 											onKeyDown={e =>
-												e.key === 'Enter' && (e.preventDefault(), addLanguage())
+												e.key === 'Enter' &&
+												(e.preventDefault(),
+												setLanguages([
+													...languages,
+													{
+														lang: newLangName,
+														level: newLangLevel,
+														isNative: newLangNative,
+													},
+												]))
 											}
 										/>
 										<div className='flex gap-2 w-full sm:w-auto'>
@@ -495,7 +448,7 @@ export default function SettingsPage() {
 												onValueChange={setNewLangLevel}
 											>
 												<SelectTrigger className='w-full sm:w-[110px]'>
-													<SelectValue placeholder='Daraja' />
+													<SelectValue placeholder={t('settings.level')} />
 												</SelectTrigger>
 												<SelectContent>
 													{['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].map(l => (
@@ -515,12 +468,24 @@ export default function SettingsPage() {
 													htmlFor='isNative'
 													className='font-medium cursor-pointer whitespace-nowrap'
 												>
-													Ona tili
+													{t('profile.nativeLanguage')}
 												</label>
 											</div>
 											<Button
 												type='button'
-												onClick={addLanguage}
+												onClick={() => {
+													if (newLangName) {
+														setLanguages([
+															...languages,
+															{
+																lang: newLangName,
+																level: newLangLevel,
+																isNative: newLangNative,
+															},
+														])
+														setNewLangName('')
+													}
+												}}
 												size='icon'
 												className='shrink-0'
 											>
@@ -546,7 +511,7 @@ export default function SettingsPage() {
 															variant='outline'
 															className='text-xs border-emerald-200 text-emerald-600 bg-emerald-50 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-400'
 														>
-															Ona tili
+															{t('profile.nativeLanguage')}
 														</Badge>
 													)}
 												</div>
@@ -555,7 +520,11 @@ export default function SettingsPage() {
 													variant='ghost'
 													size='icon'
 													className='h-8 w-8 text-destructive'
-													onClick={() => removeLanguage(i)}
+													onClick={() =>
+														setLanguages(
+															languages.filter((_, idx) => idx !== i),
+														)
+													}
 												>
 													<Trash2 className='h-4 w-4' />
 												</Button>
@@ -563,36 +532,41 @@ export default function SettingsPage() {
 										))}
 										{languages.length === 0 && (
 											<p className='text-sm text-muted-foreground text-center py-4 italic border border-dashed rounded-md'>
-												Tillar hali qo&apos;shilmagan.
+												{t('settings.noLanguages')}
 											</p>
 										)}
 									</div>
 								</CardContent>
 							</Card>
 
-							{/* Texnik ko'nikmalar */}
 							<Card>
 								<CardHeader>
 									<CardTitle className='text-base'>
-										Texnik ko&apos;nikmalar
+										{t('settings.technicalSkills')}
 									</CardTitle>
 								</CardHeader>
 								<CardContent className='space-y-4'>
 									<div className='flex gap-2'>
 										<Input
-											placeholder='Masalan: ReactJS, Figma, Python...'
+											placeholder={t('settings.skillPlaceholder')}
 											value={newSkill}
 											onChange={e => setNewSkill(e.target.value)}
 											onKeyDown={e =>
-												e.key === 'Enter' && (e.preventDefault(), addSkill())
+												e.key === 'Enter' &&
+												(e.preventDefault(), setSkills([...skills, newSkill]))
 											}
 										/>
 										<Button
 											type='button'
-											onClick={addSkill}
+											onClick={() => {
+												if (newSkill) {
+													setSkills([...skills, newSkill])
+													setNewSkill('')
+												}
+											}}
 											className='shrink-0 px-4'
 										>
-											Qo'shish
+											{t('settings.add')}
 										</Button>
 									</div>
 									<div className='flex flex-wrap gap-2 pt-2'>
@@ -605,7 +579,9 @@ export default function SettingsPage() {
 												{skill}
 												<button
 													type='button'
-													onClick={() => removeSkill(skill)}
+													onClick={() =>
+														setSkills(skills.filter(s => s !== skill))
+													}
 													className='text-muted-foreground hover:text-foreground rounded-full transition-colors'
 												>
 													<X className='h-3.5 w-3.5' />
@@ -614,34 +590,39 @@ export default function SettingsPage() {
 										))}
 										{skills.length === 0 && (
 											<p className='text-sm text-muted-foreground text-center py-4 italic border border-dashed rounded-md w-full'>
-												Texnik ko&apos;nikmalar qo&apos;shilmagan.
+												{t('settings.noSkills')}
 											</p>
 										)}
 									</div>
 								</CardContent>
 							</Card>
 
-							{/* Dars vaqtlari */}
 							<Card>
 								<CardHeader className='flex flex-row items-center justify-between pb-4 border-b'>
 									<div>
 										<CardTitle className='text-base'>
-											Dars o&apos;tish vaqtlari
+											{t('settings.lessonTimes')}
 										</CardTitle>
 										<CardDescription className='mt-1'>
-											Qaysi kunlari va qaysi vaqtda dars o'tishingizni
-											belgilang.
+											{t('settings.lessonTimesDesc')}
 										</CardDescription>
 									</div>
 									<Button
 										type='button'
 										size='sm'
 										variant='outline'
-										onClick={addScheduleRow}
+										onClick={() =>
+											setSchedule([
+												...schedule,
+												{ day: t('days.monday'), from: '09:00', to: '18:00' },
+											])
+										}
 										className='h-9 shrink-0'
 									>
 										<Plus className='h-4 w-4 sm:mr-2' />{' '}
-										<span className='hidden sm:inline'>Vaqt qo&apos;shish</span>
+										<span className='hidden sm:inline'>
+											{t('settings.addTime')}
+										</span>
 									</Button>
 								</CardHeader>
 								<CardContent className='space-y-4 pt-6'>
@@ -652,29 +633,23 @@ export default function SettingsPage() {
 										>
 											<div className='sm:col-span-4 space-y-1.5'>
 												<Label className='text-xs text-muted-foreground'>
-													Hafta kuni
+													{t('settings.day')}
 												</Label>
 												<Select
 													value={slot.day}
-													onValueChange={v =>
-														handleScheduleChange(idx, 'day', v)
-													}
+													onValueChange={v => {
+														const n = [...schedule]
+														n[idx].day = v
+														setSchedule(n)
+													}}
 												>
 													<SelectTrigger>
-														<SelectValue placeholder='Tanlang' />
+														<SelectValue placeholder={t('common.search')} />
 													</SelectTrigger>
 													<SelectContent>
-														{[
-															'Dushanba',
-															'Seshanba',
-															'Chorshanba',
-															'Payshanba',
-															'Juma',
-															'Shanba',
-															'Yakshanba',
-														].map(d => (
-															<SelectItem key={d} value={d}>
-																{d}
+														{daysList.map(d => (
+															<SelectItem key={d.key} value={d.label}>
+																{d.label}
 															</SelectItem>
 														))}
 													</SelectContent>
@@ -682,34 +657,40 @@ export default function SettingsPage() {
 											</div>
 											<div className='sm:col-span-3 space-y-1.5'>
 												<Label className='text-xs text-muted-foreground'>
-													Boshlanish
+													{t('settings.start')}
 												</Label>
 												<Input
 													type='time'
 													value={slot.from}
-													onChange={e =>
-														handleScheduleChange(idx, 'from', e.target.value)
-													}
+													onChange={e => {
+														const n = [...schedule]
+														n[idx].from = e.target.value
+														setSchedule(n)
+													}}
 												/>
 											</div>
 											<div className='sm:col-span-5 flex items-end gap-3'>
 												<div className='flex-1 space-y-1.5'>
 													<Label className='text-xs text-muted-foreground'>
-														Tugash
+														{t('settings.end')}
 													</Label>
 													<Input
 														type='time'
 														value={slot.to}
-														onChange={e =>
-															handleScheduleChange(idx, 'to', e.target.value)
-														}
+														onChange={e => {
+															const n = [...schedule]
+															n[idx].to = e.target.value
+															setSchedule(n)
+														}}
 													/>
 												</div>
 												<Button
 													type='button'
 													variant='outline'
 													size='icon'
-													onClick={() => removeScheduleRow(idx)}
+													onClick={() =>
+														setSchedule(schedule.filter((_, i) => i !== idx))
+													}
 													className='shrink-0 text-destructive border-destructive/20 hover:bg-destructive hover:text-destructive-foreground'
 												>
 													<Trash2 className='h-4 w-4' />
@@ -719,7 +700,7 @@ export default function SettingsPage() {
 									))}
 									{schedule.length === 0 && (
 										<p className='text-sm text-muted-foreground text-center py-8 border border-dashed rounded-lg italic'>
-											Hozircha dars vaqtlari kiritilmagan.
+											{t('settings.noSchedule')}
 										</p>
 									)}
 								</CardContent>
@@ -736,34 +717,30 @@ export default function SettingsPage() {
 									) : (
 										<Save className='h-4 w-4' />
 									)}
-									Barchasini saqlash
+									{t('settings.saveAll')}
 								</Button>
 							</div>
 						</div>
 					)}
 				</TabsContent>
 
-				{/* ===== SYSTEM SETTINGS TAB ===== */}
 				<TabsContent value='system' className='space-y-6 outline-none'>
-					{/* Theme */}
 					<Card>
 						<CardHeader>
 							<CardTitle className='text-base flex items-center gap-2'>
-								<Sun className='w-4 h-4' /> Mavzu
+								<Sun className='w-4 h-4' /> {t('settings.themeTitle')}
 							</CardTitle>
-							<CardDescription>
-								Tizimning vizual ko'rinishini tanlang.
-							</CardDescription>
+							<CardDescription>{t('settings.themeDesc')}</CardDescription>
 						</CardHeader>
 						<CardContent>
 							<div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
-								{themes.map(t => {
-									const Icon = t.icon
-									const isActive = theme === t.key
+								{themes.map(ti => {
+									const Icon = ti.icon
+									const isActive = theme === ti.key
 									return (
 										<button
-											key={t.key}
-											onClick={() => setTheme(t.key)}
+											key={ti.key}
+											onClick={() => setTheme(ti.key)}
 											className={cn(
 												'flex sm:flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all text-left sm:text-center',
 												isActive
@@ -787,58 +764,7 @@ export default function SettingsPage() {
 													isActive ? 'text-primary' : 'text-muted-foreground',
 												)}
 											>
-												{t.label}
-											</span>
-											{isActive && (
-												<Check className='w-4 h-4 text-primary sm:hidden' />
-											)}
-										</button>
-									)
-								})}
-							</div>
-						</CardContent>
-					</Card>
-
-					{/* Language */}
-					<Card>
-						<CardHeader>
-							<CardTitle className='text-base flex items-center gap-2'>
-								<Globe className='w-4 h-4' /> Interfeys tili
-							</CardTitle>
-							<CardDescription>
-								Platformadan foydalanish tilini o'zgartiring.
-							</CardDescription>
-						</CardHeader>
-						<CardContent>
-							<div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
-								{langs.map(l => {
-									const isActive = form.language === l.key
-									return (
-										<button
-											key={l.key}
-											onClick={() => {
-												updateField('language', l.key)
-												api
-													.put('/auth/profile', { language: l.key })
-													.catch(() => {})
-											}}
-											className={cn(
-												'flex sm:flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all text-left sm:text-center',
-												isActive
-													? 'border-primary bg-primary/5'
-													: 'border-muted hover:border-muted-foreground/30',
-											)}
-										>
-											<span className='text-2xl p-1 bg-muted rounded-lg'>
-												{l.flag}
-											</span>
-											<span
-												className={cn(
-													'flex-1 text-sm font-medium',
-													isActive ? 'text-primary' : 'text-muted-foreground',
-												)}
-											>
-												{l.label}
+												{ti.label}
 											</span>
 											{isActive && (
 												<Check className='w-4 h-4 text-primary sm:hidden' />

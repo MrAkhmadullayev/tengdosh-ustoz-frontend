@@ -17,19 +17,20 @@ import {
 	InputOTPSlot,
 } from '@/components/ui/input-otp'
 import api from '@/lib/api'
-import {
-	AlertCircle,
-	Loader2,
-	MessageCircle,
-	Send,
-	ShieldCheck,
-} from 'lucide-react'
+import { useAuth } from '@/lib/auth-context'
+import { useTranslation } from '@/lib/i18n'
+// 🔥 utils'dan markaziy funksiya olinmoqda
+import { cn, getErrorMessage } from '@/lib/utils'
+import { Loader2, MessageCircle, Send, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 
 export default function LoginPage() {
 	const router = useRouter()
+	const { refreshUser } = useAuth()
+	const { t } = useTranslation()
 
 	const [otp, setOtp] = useState('')
 	const [isLoading, setIsLoading] = useState(false)
@@ -38,7 +39,7 @@ export default function LoginPage() {
 	const [error, setError] = useState('')
 	const [roleText, setRoleText] = useState('')
 
-	// Taymer mantig'i
+	// 1. Taymerni ishlashi
 	useEffect(() => {
 		if (timeLeft > 0) {
 			const timerId = setTimeout(() => setTimeLeft(timeLeft - 1), 1000)
@@ -46,13 +47,16 @@ export default function LoginPage() {
 		}
 	}, [timeLeft])
 
-	// Kodni tozalash (xatolik bo'lganda yangidan yozish uchun qulaylik)
-	const handleOtpChange = value => {
-		setOtp(value)
-		if (error) setError('') // Yangi son terilganda xatoni o'chirish
-	}
+	// 2. Input o'zgarishi
+	const handleOtpChange = useCallback(
+		value => {
+			setOtp(value)
+			if (error) setError('')
+		},
+		[error],
+	)
 
-	// Kirishni tasdiqlash va Rollarni ajratish
+	// 3. OTP ni tekshirish (Verifikatsiya)
 	const handleVerify = async e => {
 		e.preventDefault()
 		if (otp.length !== 6) return
@@ -62,94 +66,94 @@ export default function LoginPage() {
 
 		try {
 			const res = await api.post('/auth/verify', { code: otp })
-			const data = res.data
 
-			if (!data.success) {
-				setError(
-					data.message || 'Kiritilgan tasdiqlash kodi xato yoki yaroqsiz.',
-				)
-				setOtp('')
+			if (!res.data?.success) {
+				throw new Error(res.data?.message || t('auth.invalidCode'))
+			}
+
+			const { user } = res.data
+			setIsSuccess(true)
+			await refreshUser() // Contextdagi userni yangilash
+			toast.success(t('auth.success') || 'Muvaffaqiyatli kirdingiz')
+
+			// Role ga qarab yo'naltirish
+			if (!user.isRegistered) {
+				setRoleText(t('auth.registration') || "Ro'yxatdan o'tish")
+				setTimeout(() => router.push('/authentication/confirm'), 1500)
+			} else if (user.role === 'admin') {
+				setRoleText(t('auth.roleAdmin') || 'Admin panel')
+				setTimeout(() => (window.location.href = '/admin/dashboard'), 1500)
+			} else if (user.role === 'mentor') {
+				setRoleText(t('auth.roleMentor') || 'Mentor paneli')
+				setTimeout(() => (window.location.href = '/mentor/dashboard'), 1500)
 			} else {
-				const { user } = data
-				setIsSuccess(true)
-
-				if (!user.isRegistered) {
-					setRoleText("Ro'yxatdan o'tish")
-					setTimeout(() => router.push('/authentication/confirm'), 1500)
-				} else if (user.role === 'admin') {
-					setRoleText('Admin')
-					setTimeout(() => router.push('/admin/dashboard'), 1500)
-				} else if (user.role === 'mentor') {
-					setRoleText('Mentor')
-					setTimeout(() => router.push('/mentor/dashboard'), 1500)
-				} else {
-					setRoleText('Talaba')
-					setTimeout(() => router.push('/student/dashboard'), 1500)
-				}
+				setRoleText(t('auth.roleStudent') || 'Talaba paneli')
+				setTimeout(() => (window.location.href = '/student/dashboard'), 1500)
 			}
 		} catch (err) {
-			console.error('Auth error:', err)
-			setError(
-				err.response?.data?.message || 'Server bilan ulanishda xato yuz berdi.',
-			)
-			setOtp('')
+			const errMsg = getErrorMessage(err, t('auth.serverError'))
+			setError(errMsg)
+			setOtp('') // Xato bo'lsa darhol kodni o'chirish
 		} finally {
 			setIsLoading(false)
 		}
 	}
 
+	// UI: Asosiy qism
 	return (
-		<div className='min-h-screen bg-muted/20 flex flex-col'>
+		<div className='min-h-screen bg-muted/30 flex flex-col'>
 			<Navbar />
 
 			<main className='flex-1 flex flex-col items-center justify-center p-4'>
-				<Card className='w-full max-w-md border-muted shadow-lg'>
+				<Card className='w-full max-w-md shadow-lg border-border'>
+					{/* Muvaffaqiyatli kirish state'i */}
 					{isSuccess ? (
-						// MUVAFFAQIYATLI KIRISH
 						<CardContent className='pt-10 pb-10 flex flex-col items-center text-center space-y-4 animate-in fade-in zoom-in duration-300'>
-							<div className='h-20 w-20 bg-green-500/10 rounded-full flex items-center justify-center mb-2'>
-								<ShieldCheck className='h-10 w-10 text-green-500' />
+							<div className='h-16 w-16 bg-green-500/10 rounded-full flex items-center justify-center mb-2'>
+								<ShieldCheck className='h-8 w-8 text-green-500' />
 							</div>
-							<CardTitle className='text-2xl'>Muvaffaqiyatli!</CardTitle>
-							<CardDescription className='text-base'>
-								Tizimga muvaffaqiyatli kirdingiz.{' '}
-								<strong className='text-foreground'>{roleText} paneli</strong>ga
-								yo'naltirilmoqdasiz...
+							<CardTitle className='text-2xl'>
+								{t('auth.success') || 'Muvaffaqiyatli'}
+							</CardTitle>
+							<CardDescription className='text-base font-medium'>
+								{t('auth.successMessage') || 'Tizimga kirildi.'}{' '}
+								<span className='text-foreground font-bold'>{roleText}</span>{' '}
+								{t('auth.redirecting') || "sahifasiga yo'naltirilmoqda..."}
 							</CardDescription>
-							<Loader2 className='h-6 w-6 animate-spin text-primary mt-4' />
+							<Loader2 className='h-6 w-6 animate-spin text-muted-foreground mt-4' />
 						</CardContent>
 					) : (
-						// LOGIN FORMASI
 						<>
-							<CardHeader className='text-center space-y-3 pb-6 pt-8'>
-								<div className='mx-auto bg-primary/10 w-14 h-14 rounded-2xl flex items-center justify-center mb-2'>
-									<ShieldCheck className='h-7 w-7 text-primary' />
+							{/* Login header */}
+							<CardHeader className='text-center space-y-2 pb-6 pt-8'>
+								<div className='mx-auto bg-muted w-12 h-12 rounded-xl flex items-center justify-center mb-3'>
+									<ShieldCheck className='h-6 w-6 text-foreground' />
 								</div>
 								<CardTitle className='text-2xl font-bold tracking-tight'>
-									Tizimga kirish
+									{t('auth.title') || 'Tizimga kirish'}
 								</CardTitle>
-								<CardDescription className='text-base'>
-									Telegram botimiz orqali olingan 6 xonali tasdiqlash kodini
-									kiriting.
+								<CardDescription className='text-sm font-medium'>
+									{t('auth.description') ||
+										'Telegram bot orqali olingan 6 xonali kodni kiriting.'}
 								</CardDescription>
 							</CardHeader>
 
 							<CardContent className='space-y-6'>
-								{/* TELEGRAM BOT LINKI */}
-								<div className='bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 flex items-center justify-between'>
+								{/* Bot info */}
+								<div className='bg-muted p-4 rounded-xl border flex items-center justify-between shadow-sm'>
 									<div className='flex items-center gap-3'>
-										<div className='bg-blue-500 text-white p-2 rounded-full'>
-											<MessageCircle className='h-5 w-5' />
+										<div className='bg-primary/10 text-primary p-2 rounded-lg'>
+											<MessageCircle className='h-4 w-4' />
 										</div>
 										<div className='text-left'>
-											<p className='text-sm font-medium text-foreground'>
-												Kodni olish uchun:
+											<p className='text-xs text-muted-foreground font-medium mb-0.5'>
+												{t('auth.getCode') || 'Kodni olish uchun'}
 											</p>
 											<a
 												href='https://t.me/TengdoshUstoz_Bot'
 												target='_blank'
 												rel='noopener noreferrer'
-												className='text-sm font-bold text-blue-600 dark:text-blue-400 hover:underline'
+												className='text-sm font-bold text-primary hover:underline'
 											>
 												@TengdoshUstoz_Bot
 											</a>
@@ -158,7 +162,7 @@ export default function LoginPage() {
 									<Button
 										size='icon'
 										variant='ghost'
-										className='h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-500/20'
+										className='h-8 w-8 text-primary'
 										asChild
 									>
 										<a
@@ -171,12 +175,12 @@ export default function LoginPage() {
 									</Button>
 								</div>
 
-								{/* OTP INPUT */}
+								{/* OTP Form */}
 								<form
 									onSubmit={handleVerify}
-									className='flex flex-col items-center space-y-6'
+									className='flex flex-col items-center space-y-5'
 								>
-									<div className='flex justify-center w-full relative'>
+									<div className='flex justify-center w-full'>
 										<InputOTP
 											maxLength={6}
 											value={otp}
@@ -187,67 +191,80 @@ export default function LoginPage() {
 											<InputOTPGroup>
 												<InputOTPSlot
 													index={0}
-													className={`h-12 w-10 sm:w-12 sm:h-14 text-lg ${error ? 'border-red-500 text-red-500' : ''}`}
+													className={cn(
+														'h-12 w-11 sm:w-12 sm:h-14 text-lg',
+														error && 'border-destructive',
+													)}
 												/>
 												<InputOTPSlot
 													index={1}
-													className={`h-12 w-10 sm:w-12 sm:h-14 text-lg ${error ? 'border-red-500 text-red-500' : ''}`}
+													className={cn(
+														'h-12 w-11 sm:w-12 sm:h-14 text-lg',
+														error && 'border-destructive',
+													)}
 												/>
 												<InputOTPSlot
 													index={2}
-													className={`h-12 w-10 sm:w-12 sm:h-14 text-lg ${error ? 'border-red-500 text-red-500' : ''}`}
+													className={cn(
+														'h-12 w-11 sm:w-12 sm:h-14 text-lg',
+														error && 'border-destructive',
+													)}
 												/>
 											</InputOTPGroup>
 											<InputOTPSeparator />
 											<InputOTPGroup>
 												<InputOTPSlot
 													index={3}
-													className={`h-12 w-10 sm:w-12 sm:h-14 text-lg ${error ? 'border-red-500 text-red-500' : ''}`}
+													className={cn(
+														'h-12 w-11 sm:w-12 sm:h-14 text-lg',
+														error && 'border-destructive',
+													)}
 												/>
 												<InputOTPSlot
 													index={4}
-													className={`h-12 w-10 sm:w-12 sm:h-14 text-lg ${error ? 'border-red-500 text-red-500' : ''}`}
+													className={cn(
+														'h-12 w-11 sm:w-12 sm:h-14 text-lg',
+														error && 'border-destructive',
+													)}
 												/>
 												<InputOTPSlot
 													index={5}
-													className={`h-12 w-10 sm:w-12 sm:h-14 text-lg ${error ? 'border-red-500 text-red-500' : ''}`}
+													className={cn(
+														'h-12 w-11 sm:w-12 sm:h-14 text-lg',
+														error && 'border-destructive',
+													)}
 												/>
 											</InputOTPGroup>
 										</InputOTP>
 									</div>
 
-									{/* XATOLIK XABARI */}
 									{error && (
-										<div className='flex items-center gap-2 text-sm text-red-500 font-medium bg-red-500/10 px-3 py-2 rounded-lg w-full justify-center animate-in slide-in-from-top-1'>
-											<AlertCircle className='h-4 w-4 shrink-0' />
+										<p className='text-sm text-destructive font-medium text-center animate-in slide-in-from-top-1'>
 											{error}
-										</div>
+										</p>
 									)}
 
 									<Button
 										type='submit'
-										className='w-full h-12 text-base font-semibold'
+										className='w-full h-11 font-semibold'
 										disabled={otp.length !== 6 || isLoading}
 									>
-										{isLoading ? (
-											<>
-												<Loader2 className='mr-2 h-5 w-5 animate-spin' />
-												Tekshirilmoqda...
-											</>
-										) : (
-											'Tasdiqlash va Kirish'
+										{isLoading && (
+											<Loader2 className='mr-2 h-4 w-4 animate-spin' />
 										)}
+										{!isLoading && (t('auth.verify') || 'Tasdiqlash')}
 									</Button>
 								</form>
 							</CardContent>
 
-							<CardFooter className='flex flex-col items-center justify-center pb-8 border-t pt-6 bg-muted/10 rounded-b-xl'>
-								<p className='text-sm text-muted-foreground mb-2'>
-									Kodni olmadingizmi?
+							{/* Resend footer */}
+							<CardFooter className='flex flex-col items-center justify-center pb-6 border-t pt-5 bg-muted/5 rounded-b-xl'>
+								<p className='text-xs text-muted-foreground mb-1 font-medium'>
+									{t('auth.codeNotReceived') || 'Kod kelmadimi?'}
 								</p>
 								<Button
 									variant='link'
-									className='text-primary font-medium p-0 h-auto'
+									className='text-primary font-semibold p-0 h-auto text-xs'
 									disabled={timeLeft > 0}
 									onClick={() => {
 										setTimeLeft(60)
@@ -256,21 +273,22 @@ export default function LoginPage() {
 									}}
 								>
 									{timeLeft > 0
-										? `Qayta so'rash (${timeLeft}s)`
-										: 'Kodni qayta yuborish'}
+										? t('auth.resendTimer', { seconds: timeLeft }) ||
+											`Qayta yuborish (${timeLeft}s)`
+										: t('auth.resendCode') || 'Kodni qayta yuborish'}
 								</Button>
 							</CardFooter>
 						</>
 					)}
 				</Card>
 
-				{/* Footer yozuvi */}
-				<p className='mt-8 text-sm text-muted-foreground text-center max-w-xs'>
-					Tizimga kirish orqali siz platformaning{' '}
-					<Link href='/terms' className='underline hover:text-foreground'>
-						Foydalanish shartlariga
+				{/* Terms and conditions */}
+				<p className='mt-8 text-xs font-medium text-muted-foreground text-center max-w-xs'>
+					{t('auth.termsAgree') || 'Tizimga kirish orqali siz'}{' '}
+					<Link href='/home/terms' className='underline hover:text-foreground'>
+						{t('auth.termsLink') || 'Foydalanish shartlariga'}
 					</Link>{' '}
-					rozi bo'lasiz.
+					{t('auth.termsEnd') || "rozi bo'lasiz."}
 				</p>
 			</main>
 		</div>

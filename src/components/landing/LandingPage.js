@@ -1,43 +1,58 @@
 import dynamic from 'next/dynamic'
 import Hero from './Hero'
-import LiveAlerts from './LiveAlerts'
 import Navbar from './Navbar'
 
-const PlatformMockup = dynamic(() => import('./PlatformMockup'))
+// ==========================================
+// 🧩 YORDAMCHI SKELETON (CLS ni oldini olish uchun)
+// ==========================================
+const SectionSkeleton = ({ className }) => (
+	<section className={`w-full bg-muted/10 animate-pulse ${className}`} />
+)
+
+// ==========================================
+// 📦 DYNAMIC IMPORTS (Dangasa yuklash)
+// ==========================================
+const PlatformMockup = dynamic(() => import('./PlatformMockup'), {
+	loading: () => <SectionSkeleton className='h-[400px] md:h-[600px]' />,
+})
 
 const HowItWorks = dynamic(() => import('./HowItWorks'), {
-	loading: () => (
-		<div className='h-64 flex items-center justify-center animate-pulse bg-muted/20'>
-			Yuklanmoqda...
-		</div>
-	),
-	ssr: true,
+	loading: () => <SectionSkeleton className='h-[500px]' />,
+	ssr: true, // SEO uchun muhim bo'lsa, SSR yoniq qoladi
 })
 
 const Features = dynamic(() => import('./Features'), {
-	loading: () => <div className='h-96 bg-muted/10 animate-pulse'></div>,
+	loading: () => <SectionSkeleton className='h-[600px] md:h-[800px]' />,
 })
 
-const LeaderboardPreview = dynamic(() => import('./LeaderboardPreview'))
+const LeaderboardPreview = dynamic(() => import('./LeaderboardPreview'), {
+	loading: () => <SectionSkeleton className='h-[400px]' />,
+})
 
 const LiveClasses = dynamic(() => import('./LiveClasses'), {
-	loading: () => <div className='h-96 bg-muted/10 animate-pulse'></div>,
+	loading: () => <SectionSkeleton className='h-[500px]' />,
 })
 
 const Statistics = dynamic(() => import('./Statistics'), {
-	loading: () => <div className='h-48 bg-muted/10 animate-pulse'></div>,
+	loading: () => <SectionSkeleton className='h-[300px]' />,
 })
 
-const Testimonials = dynamic(() => import('./Testimonials'))
+const Testimonials = dynamic(() => import('./Testimonials'), {
+	loading: () => <SectionSkeleton className='h-[400px]' />,
+})
 
-const Footer = dynamic(() => import('./Footer'))
+const Footer = dynamic(() => import('./Footer'), {
+	loading: () => <SectionSkeleton className='h-[300px] bg-muted/20' />,
+})
 
+// ==========================================
+// 🚀 ASOSIY KOMPONENT
+// ==========================================
 export default function LandingPage() {
 	return (
 		<div className='flex min-h-screen flex-col bg-background text-foreground scroll-smooth'>
-			<LiveAlerts />
 			<Navbar />
-			<main className='flex-1'>
+			<main className='flex-1 w-full'>
 				<Hero />
 				<PlatformMockup />
 				<HowItWorks />

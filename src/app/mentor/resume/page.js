@@ -2,9 +2,11 @@
 
 import { Card, CardContent } from '@/components/ui/card'
 import api from '@/lib/api'
-import { CheckCircle2 } from 'lucide-react'
+import { getErrorMessage } from '@/lib/utils'
+import { Check } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { toast } from 'sonner'
 import Step1Info from './components/Step1Info'
 import Step2Skills from './components/Step2Skills'
 import Step3Schedule from './components/Step3Schedule'
@@ -30,17 +32,17 @@ export default function MentorResumePage() {
 		setIsSubmitting(true)
 		try {
 			const res = await api.post('/mentor/resume', formData)
-			if (res.data.success) {
-				// Muvaffaqiyatli saqlandi. User obyektidagi isResumeCompleted ham true bo'ldi.
-				// Endi uni Dashboard ga yo'naltiramiz
+			if (res?.data?.success) {
+				toast.success('Rezyume muvaffaqiyatli saqlandi!')
 				router.push('/mentor/dashboard')
 				router.refresh()
 			}
 		} catch (error) {
-			console.error('Rezyumeni yuborishda xatolik:', error)
-			alert(
-				error.response?.data?.message ||
+			toast.error(
+				getErrorMessage(
+					error,
 					"Xatolik yuz berdi. Iltimos qayta urinib ko'ring.",
+				),
 			)
 		} finally {
 			setIsSubmitting(false)
@@ -48,39 +50,40 @@ export default function MentorResumePage() {
 	}
 
 	return (
-		<div className='w-full max-w-3xl mx-auto'>
-			{/* Progress Indicator */}
-			<div className='mb-8'>
-				<div className='flex items-center justify-between relative'>
-					<div className='absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-muted rounded-full -z-10'></div>
-					<div
-						className='absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-primary rounded-full -z-10 transition-all duration-500 ease-in-out'
-						style={{ width: `${((step - 1) / 2) * 100}%` }}
-					/>
+		<div className='w-full max-w-2xl mx-auto space-y-8'>
+			{/* Progress Indicator (Toza Vercel style) */}
+			<div className='relative mb-8 px-2 sm:px-6'>
+				<div className='absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-muted rounded-full -z-10' />
+				<div
+					className='absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-primary rounded-full -z-10 transition-all duration-500 ease-in-out'
+					style={{ width: `${((step - 1) / 2) * 100}%` }}
+				/>
 
+				<div className='flex justify-between w-full'>
 					{[1, 2, 3].map(s => (
-						<div
-							key={s}
-							className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 ${
-								step > s
-									? 'bg-primary text-primary-foreground scale-110 shadow-md'
-									: step === s
-										? 'bg-primary text-primary-foreground ring-4 ring-primary/20 scale-110'
-										: 'bg-background border-2 border-muted text-muted-foreground'
-							}`}
-						>
-							{step > s ? <CheckCircle2 className='h-5 w-5' /> : s}
+						<div key={s} className='flex flex-col items-center gap-2'>
+							<div
+								className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+									step > s
+										? 'bg-primary text-primary-foreground'
+										: step === s
+											? 'bg-background border-2 border-primary text-primary ring-4 ring-primary/10'
+											: 'bg-background border-2 border-muted text-muted-foreground'
+								}`}
+							>
+								{step > s ? <Check className='h-4 w-4' /> : s}
+							</div>
+							<span
+								className={`text-[11px] font-semibold uppercase tracking-wider ${step >= s ? 'text-foreground' : 'text-muted-foreground'}`}
+							>
+								{s === 1 ? 'Asosiy' : s === 2 ? "Ko'nikma" : 'Jadval'}
+							</span>
 						</div>
 					))}
 				</div>
-				<div className='flex justify-between mt-2 text-xs font-semibold text-muted-foreground px-1'>
-					<span className={step >= 1 ? 'text-primary' : ''}>Asosiy</span>
-					<span className={step >= 2 ? 'text-primary' : ''}>Ko'nikmalar</span>
-					<span className={step >= 3 ? 'text-primary' : ''}>Jadval</span>
-				</div>
 			</div>
 
-			<Card className='shadow-lg border-primary/10'>
+			<Card className='shadow-lg border-border'>
 				<CardContent className='p-6 sm:p-10'>
 					{step === 1 && (
 						<Step1Info

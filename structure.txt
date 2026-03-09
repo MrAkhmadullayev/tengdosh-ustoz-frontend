@@ -1,0 +1,73 @@
+client/
+├── public/                     # Statik fayllar (rasmlar, fontlar, ikonlar)
+│   ├── logo.png                # Platforma logotipi
+│   └── ...svg fayllar          # Vercel, Next, Globe kabi ikonlar
+│
+├── src/                        # Barcha asosiy kodlar shu yerda yoziladi
+│   │
+│   ├── app/                    # 🚀 Next.js App Router (Sahifalar va Marshrutlar)
+│   │   ├── admin/              # Admin paneli
+│   │   │   ├── applications/   # Kelib tushgan arizalar
+│   │   │   ├── dashboard/      # Admin bosh sahifasi
+│   │   │   ├── kpi/            # Platforma statistikasi va KPI
+│   │   │   ├── lessons/        # Barcha darslarni nazorat qilish
+│   │   │   ├── mentors/        # Mentorlarni boshqarish
+│   │   │   └── students/       # Talabalarni boshqarish
+│   │   │
+│   │   ├── authentication/     # Avtorizatsiya jarayoni
+│   │   │   └── confirm/        # Ro'yxatdan o'tishni yakunlash (Onboarding)
+│   │   │
+│   │   ├── home/               # Platforma ochiq sahifalari (Mehmonlar uchun)
+│   │   │   ├── about/          # Loyiha haqida
+│   │   │   ├── faq/            # Ko'p so'raladigan savollar
+│   │   │   ├── live-lessons/   # Ochiq jonli darslar
+│   │   │   ├── mentors/        # Top mentorlar ro'yxati
+│   │   │   └── terms/          # Foydalanish shartlari
+│   │   │
+│   │   ├── mentor/             # Mentor paneli
+│   │   │   ├── dashboard/      # Mentor bosh sahifasi
+│   │   │   ├── kpi/            # Mentor reytingi va statistikasi
+│   │   │   ├── lessons/        # Dars yaratish va efirga uzatish
+│   │   │   ├── resume/         # Mentor rezyumesini to'ldirish qismi
+│   │   │   └── students/       # Mentordan dars olayotgan talabalar
+│   │   │
+│   │   ├── student/            # Talaba paneli
+│   │   │   ├── courses/        # Sotib olingan/yozilgan darslar
+│   │   │   ├── dashboard/      # Talaba bosh sahifasi
+│   │   │   ├── kpi/            # O'zlashtirish ko'rsatkichlari
+│   │   │   └── mentors/        # O'qituvchilarni qidirish va ergashish
+│   │   │
+│   │   ├── users/              # Barcha rollar uchun umumiy sahifalar
+│   │   │   ├── messages/       # Chat va yozishmalar
+│   │   │   ├── notifications/  # Bildirishnomalar
+│   │   │   ├── profile/        # Shaxsiy profil
+│   │   │   └── settings/       # Sozlamalar
+│   │   │
+│   │   ├── globals.css         # Tailwind CSS va global stillar
+│   │   ├── layout.js           # Eng asosiy Root Layout (Provider'lar shu yerda)
+│   │   └── page.js             # Bosh Landing Page (Hero section keladigan joy)
+│   │
+│   ├── components/             # 🧩 Qayta ishlatiluvchi UI va Logika qismlari
+│   │   ├── dashboard/          # Rollarga xos murakkab komponentlar
+│   │   ├── landing/            # Landing page seksiyalari (Hero, Features, Testimonials)
+│   │   ├── layouts/            # Navbar, Sidebar, Footer kabi qobiqlar
+│   │   ├── providers/          # Context Provider'lar (Soket uchun)
+│   │   ├── ui/                 # 🎨 shadcn/ui tomonidan yig'ilgan bazaviy elementlar (button, input, modal...)
+│   │   ├── error-boundary.js   # Xatoliklarni ushlab qoluvchi qobiq
+│   │   └── theme-provider.js   # Qorong'i/Yorug' rejimni boshqarish
+│   │
+│   ├── lib/                    # ⚙️ Yordamchi mantiq, API va Global state
+│   │   ├── i18n/               # Ko'p tillilik (Uz, Ru, En) konfiguratsiyasi va JSON lug'atlar
+│   │   ├── api.js              # Axios instansi va interceptorlar
+│   │   ├── auth-context.js     # Foydalanuvchi ma'lumotlarini saqlovchi Context
+│   │   ├── constants.js        # O'zgarmas qiymatlar (Menyular, Rol nomlari)
+│   │   └── utils.js            # Kichik util funksiyalar (tailwind-merge uchun clsx va hk.)
+│   │
+│   └── middleware.js           # 🛡️ Edge Router himoyasi (Sahifalarni rollarga qarab to'sish)
+│
+├── .env.local                  # Muhit o'zgaruvchilari (API_URL, SOCKET_URL va hk.)
+├── components.json             # shadcn/ui konfiguratsiya fayli
+├── jsconfig.json               # Absolute import (@/*) sozlamalari
+├── next.config.mjs             # Next.js ning maxsus sozlamalari
+├── package.json                # Loyiha kutubxonalari va skriptlari
+└── postcss.config.mjs          # Tailwind CSS ni yig'ish uchun sozlama

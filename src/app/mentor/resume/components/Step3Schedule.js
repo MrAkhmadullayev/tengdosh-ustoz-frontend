@@ -10,7 +10,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select'
-import { ArrowLeft, CalendarDays, CheckCircle2, Loader2 } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Loader2, Send } from 'lucide-react'
 import { useState } from 'react'
 
 const DAYS = [
@@ -45,6 +45,7 @@ export default function Step3Schedule({
 				}
 			}
 		})
+		setErrors({})
 	}
 
 	const updateTime = (day, field, value) => {
@@ -64,7 +65,7 @@ export default function Step3Schedule({
 			return
 		}
 
-		// Validating logical times
+		// Logic validation
 		for (const slot of formData.schedule) {
 			const fromHour = parseInt(slot.from)
 			const toHour = parseInt(slot.to)
@@ -81,26 +82,28 @@ export default function Step3Schedule({
 	}
 
 	return (
-		<div className='animate-in fade-in slide-in-from-right-4 duration-500'>
-			<CardHeader className='text-center px-0 pt-0'>
-				<div className='mx-auto bg-primary/10 w-16 h-16 rounded-2xl flex items-center justify-center mb-4'>
-					<CalendarDays className='h-8 w-8 text-primary' />
+		<div className='animate-in fade-in slide-in-from-right-4 duration-300'>
+			<CardHeader className='text-center px-0 pt-0 pb-6'>
+				<div className='mx-auto bg-muted w-14 h-14 rounded-2xl flex items-center justify-center mb-3 border shadow-sm'>
+					<CalendarDays className='h-6 w-6 text-foreground' />
 				</div>
-				<CardTitle className='text-2xl font-bold'>Dars Jadvali</CardTitle>
+				<CardTitle className='text-2xl font-bold tracking-tight'>
+					Dars Jadvali
+				</CardTitle>
 				<CardDescription>
 					O'quvchilaringizga dars o'tish uchun haftaning qaysi kunlari va
 					soatlarida bo'shsiz?
 				</CardDescription>
 			</CardHeader>
 
-			<div className='space-y-6 mt-4'>
+			<div className='space-y-6'>
 				{errors.schedule && (
-					<div className='p-3 bg-red-50 border border-red-200 text-red-600 rounded-md text-sm text-center font-medium'>
+					<div className='p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg text-sm font-medium text-center'>
 						{errors.schedule}
 					</div>
 				)}
 
-				<div className='space-y-3'>
+				<div className='space-y-2'>
 					{DAYS.map(day => {
 						const slot = formData.schedule.find(s => s.day === day)
 						const isSelected = !!slot
@@ -109,20 +112,20 @@ export default function Step3Schedule({
 							<div
 								key={day}
 								className={`
-									flex flex-col sm:flex-row sm:items-center justify-between px-6 py-2 rounded-xl border transition-all
-									${isSelected ? 'bg-primary/5 border-primary/30 ring-1 ring-primary/20' : 'bg-card hover:bg-muted/50'}
-								`}
+                  flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border transition-all duration-200
+                  ${isSelected ? 'bg-primary/5 border-primary shadow-sm' : 'bg-card hover:bg-muted/50'}
+                `}
 							>
 								<div className='flex items-center space-x-3 mb-3 sm:mb-0'>
 									<Checkbox
 										id={`day-${day}`}
 										checked={isSelected}
 										onCheckedChange={() => toggleDay(day)}
-										className='h-5 w-5'
+										className='h-5 w-5 rounded-md'
 									/>
 									<label
 										htmlFor={`day-${day}`}
-										className={`text-base cursor-pointer select-none font-medium ${isSelected ? 'text-primary' : 'text-foreground'}`}
+										className={`text-sm cursor-pointer select-none font-bold ${isSelected ? 'text-primary' : 'text-foreground'}`}
 									>
 										{day}
 									</label>
@@ -134,10 +137,10 @@ export default function Step3Schedule({
 											value={slot.from}
 											onValueChange={val => updateTime(day, 'from', val)}
 										>
-											<SelectTrigger className='w-[100px] h-9 bg-background'>
+											<SelectTrigger className='w-[100px] h-9 bg-background font-medium'>
 												<SelectValue placeholder='Dan' />
 											</SelectTrigger>
-											<SelectContent>
+											<SelectContent className='max-h-[200px]'>
 												{HOURS.map(h => (
 													<SelectItem key={`from-${h}`} value={h}>
 														{h}
@@ -145,15 +148,15 @@ export default function Step3Schedule({
 												))}
 											</SelectContent>
 										</Select>
-										<span className='text-muted-foreground'>-</span>
+										<span className='text-muted-foreground font-medium'>-</span>
 										<Select
 											value={slot.to}
 											onValueChange={val => updateTime(day, 'to', val)}
 										>
-											<SelectTrigger className='w-[100px] h-9 bg-background'>
+											<SelectTrigger className='w-[100px] h-9 bg-background font-medium'>
 												<SelectValue placeholder='Gacha' />
 											</SelectTrigger>
-											<SelectContent>
+											<SelectContent className='max-h-[200px]'>
 												{HOURS.map(h => (
 													<SelectItem key={`to-${h}`} value={h}>
 														{h}
@@ -168,30 +171,26 @@ export default function Step3Schedule({
 					})}
 				</div>
 
-				<div className='pt-6 flex flex-col-reverse sm:flex-row gap-3 justify-between'>
+				<div className='pt-6 flex flex-col-reverse sm:flex-row gap-3 justify-between border-t'>
 					<Button
 						variant='outline'
 						onClick={onPrev}
-						className='w-full sm:w-auto'
+						className='w-full sm:w-auto font-medium'
 						disabled={isSubmitting}
 					>
-						<ArrowLeft className='mr-2 w-4' /> Orqaga
+						<ArrowLeft className='mr-2 h-4 w-4' /> Orqaga
 					</Button>
 					<Button
 						onClick={validateAndSubmit}
 						disabled={isSubmitting}
-						className='px-8 font-semibold w-full sm:w-auto bg-green-600 hover:bg-green-700'
+						className='w-full sm:w-auto font-medium px-8'
 					>
 						{isSubmitting ? (
-							<>
-								<Loader2 className='mr-2 h-4 w-4 animate-spin' />{' '}
-								Yuborilmoqda...
-							</>
+							<Loader2 className='mr-2 h-4 w-4 animate-spin' />
 						) : (
-							<>
-								<CheckCircle2 className='mr-2 h-4 w-4' /> Yakunlash
-							</>
+							<Send className='mr-2 h-4 w-4' />
 						)}
+						{isSubmitting ? 'Saqlanmoqda...' : 'Yuborish va Yakunlash'}
 					</Button>
 				</div>
 			</div>

@@ -1,5 +1,6 @@
 'use client'
 
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -19,6 +20,7 @@ import {
 	Languages,
 	Plus,
 	Trash2,
+	X,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -56,6 +58,7 @@ export default function Step2Skills({ formData, setFormData, onNext, onPrev }) {
 				skills: [...prev.skills, newSkill.trim()],
 			}))
 			setNewSkill('')
+			setErrors(prev => ({ ...prev, skills: null }))
 		}
 	}
 
@@ -72,7 +75,7 @@ export default function Step2Skills({ formData, setFormData, onNext, onPrev }) {
 		if (formData.languages.length === 0) {
 			newErrors.languages = 'Kamida bitta til kiritish majburiy'
 		} else {
-			formData.languages.forEach((l, i) => {
+			formData.languages.forEach(l => {
 				if (!l.lang || !l.level) {
 					newErrors.languages =
 						"Barcha kiritilgan tillar va darajalarini to'ldiring"
@@ -88,98 +91,88 @@ export default function Step2Skills({ formData, setFormData, onNext, onPrev }) {
 			setErrors(newErrors)
 			return
 		}
-
 		onNext()
 	}
 
 	return (
-		<div className='animate-in fade-in slide-in-from-right-4 duration-500'>
-			<CardHeader className='text-center px-0 pt-0'>
-				<div className='mx-auto bg-primary/10 w-16 h-16 rounded-2xl flex items-center justify-center mb-4'>
-					<Languages className='h-8 w-8 text-primary' />
+		<div className='animate-in fade-in slide-in-from-right-4 duration-300'>
+			<CardHeader className='text-center px-0 pt-0 pb-6'>
+				<div className='mx-auto bg-muted w-14 h-14 rounded-2xl flex items-center justify-center mb-3 border shadow-sm'>
+					<Languages className='h-6 w-6 text-foreground' />
 				</div>
-				<CardTitle className='text-2xl font-bold'>Til va Ko'nikmalar</CardTitle>
+				<CardTitle className='text-2xl font-bold tracking-tight'>
+					Til va Ko'nikmalar
+				</CardTitle>
 				<CardDescription>
 					Qaysi tillarni bilasiz va qanday texnik bilimlarga egasiz?
 				</CardDescription>
 			</CardHeader>
 
-			<div className='space-y-6 mt-4'>
+			<div className='space-y-8'>
 				{/* Languages Section */}
 				<div className='space-y-4'>
 					<div className='flex items-center justify-between'>
-						<Label className='text-base font-semibold'>
-							Tillar <span className='text-red-500'>*</span>
+						<Label className='text-sm font-bold flex items-center gap-2'>
+							<Languages className='w-4 h-4 text-muted-foreground' /> Tillar{' '}
+							<span className='text-destructive'>*</span>
 						</Label>
 						<Button
 							type='button'
 							variant='outline'
 							size='sm'
 							onClick={addLanguage}
+							className='h-8'
 						>
-							<Plus className='h-3 w-3 mr-1' /> Til qo'shish
+							<Plus className='h-3.5 w-3.5 mr-1.5' /> Til qo'shish
 						</Button>
 					</div>
-
-					{errors.languages && (
-						<p className='text-xs text-red-500'>{errors.languages}</p>
-					)}
 
 					<div className='space-y-3'>
 						{formData.languages.map((item, index) => (
 							<div
 								key={index}
-								className='flex flex-col sm:flex-row gap-3 items-start sm:items-center p-3 bg-muted/30 rounded-lg border'
+								className='flex flex-col sm:flex-row gap-3 items-start sm:items-center p-3 bg-muted/20 rounded-xl border'
 							>
-								<div className='flex-1 w-full'>
-									<Input
-										placeholder='Til nomi (masalan: Ingliz tili)'
-										value={item.lang}
-										onChange={e =>
-											updateLanguage(index, 'lang', e.target.value)
-										}
-									/>
-								</div>
-								<div className='w-full sm:w-[150px]'>
-									<Select
-										value={item.level}
-										onValueChange={val => updateLanguage(index, 'level', val)}
-									>
-										<SelectTrigger className='h-10'>
-											<SelectValue placeholder='Darajasi' />
-										</SelectTrigger>
-										<SelectContent>
-											<SelectItem value="A1 - Boshlang'ich">
-												A1 - Boshlang'ich
-											</SelectItem>
-											<SelectItem value='A2 - Elementar'>
-												A2 - Elementar
-											</SelectItem>
-											<SelectItem value="B1 - O'rta">B1 - O'rta</SelectItem>
-											<SelectItem value="B2 - O'rtadan yuqori">
-												B2 - O'rtadan yuqori
-											</SelectItem>
-											<SelectItem value='C1 - Mukammal'>
-												C1 - Mukammal
-											</SelectItem>
-											<SelectItem value='C2 - Ona tili'>
-												C2 - Ona tili darajasida
-											</SelectItem>
-										</SelectContent>
-									</Select>
-								</div>
-								<div className='flex items-center gap-2 pt-2 sm:pt-0 w-full sm:w-auto'>
-									<div className='flex items-center space-x-2 bg-background border px-3 h-10 rounded-md'>
+								<Input
+									placeholder='Masalan: Ingliz tili'
+									value={item.lang}
+									onChange={e => updateLanguage(index, 'lang', e.target.value)}
+									className='flex-1 bg-background'
+								/>
+								<Select
+									value={item.level}
+									onValueChange={val => updateLanguage(index, 'level', val)}
+								>
+									<SelectTrigger className='w-full sm:w-[150px] bg-background'>
+										<SelectValue placeholder='Darajasi' />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="A1 - Boshlang'ich">
+											A1 - Boshlang'ich
+										</SelectItem>
+										<SelectItem value='A2 - Elementar'>
+											A2 - Elementar
+										</SelectItem>
+										<SelectItem value="B1 - O'rta">B1 - O'rta</SelectItem>
+										<SelectItem value="B2 - O'rtadan yuqori">
+											B2 - O'rtadan yuqori
+										</SelectItem>
+										<SelectItem value='C1 - Mukammal'>C1 - Mukammal</SelectItem>
+										<SelectItem value='C2 - Ona tili'>C2 - Ona tili</SelectItem>
+									</SelectContent>
+								</Select>
+								<div className='flex items-center gap-2 w-full sm:w-auto'>
+									<div className='flex flex-1 sm:flex-none items-center space-x-2 bg-background border px-3 h-10 rounded-md'>
 										<Checkbox
 											id={`native-${index}`}
 											checked={item.isNative}
-											onCheckedChange={checked =>
-												updateLanguage(index, 'isNative', checked)
+											onCheckedChange={c =>
+												updateLanguage(index, 'isNative', c)
 											}
 										/>
 										<label
 											htmlFor={`native-${index}`}
-											className='text-sm cursor-pointer select-none'
+											className='text-sm font-medium cursor-pointer'
 										>
 											Ona tili
 										</label>
@@ -188,7 +181,7 @@ export default function Step2Skills({ formData, setFormData, onNext, onPrev }) {
 										type='button'
 										variant='ghost'
 										size='icon'
-										className='text-red-500 hover:text-red-600 hover:bg-red-50 ml-auto sm:ml-0'
+										className='text-muted-foreground hover:text-destructive shrink-0'
 										onClick={() => removeLanguage(index)}
 									>
 										<Trash2 className='h-4 w-4' />
@@ -197,20 +190,23 @@ export default function Step2Skills({ formData, setFormData, onNext, onPrev }) {
 							</div>
 						))}
 						{formData.languages.length === 0 && (
-							<div className='text-center p-4 border border-dashed rounded-lg text-muted-foreground text-sm'>
+							<div className='text-center p-6 border border-dashed rounded-xl text-muted-foreground text-sm'>
 								Hozirda tillar kiritilmagan
 							</div>
+						)}
+						{errors.languages && (
+							<p className='text-[11px] font-medium text-destructive'>
+								{errors.languages}
+							</p>
 						)}
 					</div>
 				</div>
 
-				<div className='border-t my-6'></div>
-
 				{/* Skills Section */}
 				<div className='space-y-4'>
-					<Label className='text-base font-semibold flex items-center gap-2'>
-						<Code2 className='h-4 w-4 text-primary' /> Texnik Ko'nikmalar
-						(Skills) <span className='text-red-500'>*</span>
+					<Label className='text-sm font-bold flex items-center gap-2'>
+						<Code2 className='h-4 w-4 text-muted-foreground' /> Texnik
+						Ko'nikmalar <span className='text-destructive'>*</span>
 					</Label>
 					<div className='flex gap-2'>
 						<Input
@@ -224,52 +220,59 @@ export default function Step2Skills({ formData, setFormData, onNext, onPrev }) {
 								}
 							}}
 						/>
-						<Button type='button' onClick={addSkill} className='shrink-0'>
+						<Button
+							type='button'
+							variant='secondary'
+							onClick={addSkill}
+							className='shrink-0'
+						>
 							Qo'shish
 						</Button>
 					</div>
 
-					{errors.skills && (
-						<p className='text-xs text-red-500'>{errors.skills}</p>
-					)}
-
 					<div className='flex flex-wrap gap-2 pt-2'>
 						{formData.skills.map((skill, index) => (
-							<div
+							<Badge
 								key={index}
-								className='flex items-center bg-primary/10 text-primary px-3 py-1.5 rounded-full text-sm font-medium border border-primary/20'
+								variant='secondary'
+								className='px-3 py-1.5 font-medium text-sm gap-1.5 group'
 							>
 								{skill}
 								<button
 									type='button'
 									onClick={() => removeSkill(skill)}
-									className='ml-2 hover:text-red-500 transition-colors'
+									className='text-muted-foreground group-hover:text-foreground'
 								>
-									&times;
+									<X className='h-3.5 w-3.5' />
 								</button>
-							</div>
+							</Badge>
 						))}
 						{formData.skills.length === 0 && (
-							<span className='text-sm text-muted-foreground italic'>
+							<span className='text-sm text-muted-foreground italic w-full'>
 								Ko'nikmalar kiritilmagan
 							</span>
 						)}
 					</div>
+					{errors.skills && (
+						<p className='text-[11px] font-medium text-destructive'>
+							{errors.skills}
+						</p>
+					)}
 				</div>
 
-				<div className='pt-6 flex flex-col-reverse sm:flex-row gap-3 justify-between'>
+				<div className='pt-6 flex flex-col-reverse sm:flex-row gap-3 justify-between border-t'>
 					<Button
 						variant='outline'
 						onClick={onPrev}
-						className='w-full sm:w-auto'
+						className='w-full sm:w-auto font-medium'
 					>
-						<ArrowLeft className='mr-2 w-4' /> Orqaga
+						<ArrowLeft className='mr-2 h-4 w-4' /> Orqaga
 					</Button>
 					<Button
 						onClick={validateAndNext}
-						className=' px-8 font-semibold w-full sm:w-auto'
+						className='w-full sm:w-auto font-medium'
 					>
-						Keyingisi <ArrowRight className='ml-2 w-4' />
+						Keyingisi <ArrowRight className='ml-2 h-4 w-4' />
 					</Button>
 				</div>
 			</div>

@@ -1,54 +1,64 @@
 'use client'
 
+import { useTranslation } from '@/lib/i18n'
 import { motion } from 'framer-motion'
-import { Maximize2, Terminal } from 'lucide-react'
+import { Lock, Terminal } from 'lucide-react'
 
 export default function PlatformMockup() {
+	const { t } = useTranslation()
+
 	return (
-		<section className='w-full py-16 md:py-24 container mx-auto px-4 overflow-hidden relative'>
-			<div className='text-center mb-12'>
-				<h2 className='text-3xl md:text-4xl font-extrabold mb-4'>
-					Platforma ichki ko'rinishi
+		<section className='w-full py-16 md:py-24 container mx-auto px-4 sm:px-6 lg:px-8 overflow-hidden'>
+			{/* 🏷️ Sarlavha qismi */}
+			<div className='text-center mb-12 sm:mb-16 max-w-3xl mx-auto'>
+				<h2 className='text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight mb-4'>
+					{t('landing.mockupTitle') || "Platforma qanday ko'rinishda?"}
 				</h2>
-				<p className='text-muted-foreground text-lg'>
-					Hammasi bitta joyda: Darslar, kod yozish va video aloqa.
+				<p className='text-muted-foreground text-base sm:text-lg'>
+					{t('landing.mockupDesc') ||
+						'Darslar qulay va interaktiv muhitda, maxsus video aloqa hamda real-time kod muharriri orqali olib boriladi.'}
 				</p>
 			</div>
 
+			{/* 💻 Mockup oynasi */}
 			<motion.div
-				initial={{ opacity: 0, y: 50 }}
+				initial={{ opacity: 0, y: 40 }}
 				whileInView={{ opacity: 1, y: 0 }}
 				viewport={{ once: true, margin: '-100px' }}
-				transition={{ duration: 0.8, type: 'spring' }}
-				className='relative mx-auto max-w-5xl rounded-xl border border-border/50 bg-background/50 shadow-2xl overflow-hidden'
+				transition={{ duration: 0.7, type: 'spring', stiffness: 100 }}
+				className='relative mx-auto max-w-5xl rounded-xl border bg-background shadow-2xl overflow-hidden ring-1 ring-border/50'
 			>
-				{/* Mockup Header (Browser tab) */}
-				<div className='flex items-center gap-2 px-4 py-3 bg-muted/80 border-b'>
-					<div className='flex gap-1.5'>
-						<div className='w-3 h-3 rounded-full bg-red-500/80'></div>
-						<div className='w-3 h-3 rounded-full bg-yellow-500/80'></div>
-						<div className='w-3 h-3 rounded-full bg-green-500/80'></div>
+				{/* Browser Header (Mac style) */}
+				<div className='flex items-center justify-between px-4 py-3 bg-muted/30 border-b backdrop-blur-sm'>
+					<div className='flex gap-2 items-center w-20'>
+						<div className='w-3 h-3 rounded-full bg-red-500/90 shadow-sm' />
+						<div className='w-3 h-3 rounded-full bg-amber-500/90 shadow-sm' />
+						<div className='w-3 h-3 rounded-full bg-green-500/90 shadow-sm' />
 					</div>
-					<div className='mx-auto bg-background px-3 py-1 rounded-md text-xs text-muted-foreground flex items-center gap-2'>
-						tengdoshustoz.uz/lesson/room-14 <Maximize2 className='w-3 h-3' />
+					<div className='flex-1 flex justify-center'>
+						<div className='bg-background/80 border shadow-sm px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-medium text-muted-foreground flex items-center gap-2 max-w-[250px] w-full justify-center'>
+							<Lock className='w-3 h-3' /> platform.tengdoshustoz.uz
+						</div>
 					</div>
+					<div className='w-20' />{' '}
+					{/* O'ng tarafni balanslash uchun bo'sh joy */}
 				</div>
 
-				{/* Mockup Content (Fake IDE and Video Call) */}
-				<div className='flex flex-col md:flex-row h-[400px]'>
-					{/* Chap tomon - IDE (Code editor) */}
-					<div className='flex-1 p-4 bg-[#0d1117] text-[#c9d1d9] font-mono text-sm overflow-hidden relative'>
-						<div className='flex items-center gap-2 mb-4 opacity-50'>
-							<Terminal className='w-4 h-4' /> index.js
+				{/* Mockup Content */}
+				<div className='flex flex-col md:flex-row h-[450px]'>
+					{/* Chap tomon: IDE (Code Editor) */}
+					<div className='flex-1 p-5 bg-[#0d1117] text-[#c9d1d9] font-mono text-sm sm:text-base overflow-hidden relative'>
+						<div className='flex items-center gap-2 mb-6 opacity-60 border-b border-white/10 pb-2 w-fit pr-4'>
+							<Terminal className='w-4 h-4' /> <span>lesson.js</span>
 						</div>
-						<pre className='opacity-80'>
-							<code className='text-blue-400'>const</code>{' '}
-							<code className='text-yellow-300'>peerLearning</code> ={' '}
-							<code className='text-blue-400'>async</code> () =&gt; {'{\n'}
+						<pre className='opacity-90 leading-relaxed overflow-x-auto no-scrollbar'>
+							<code className='text-[#ff7b72]'>const</code>{' '}
+							<code className='text-[#d2a8ff]'>peerLearning</code> ={' '}
+							<code className='text-[#ff7b72]'>async</code> () =&gt; {'{\n'}
 							{'  '}const student = await findMentor({'{'} topic:{' '}
-							<code className='text-green-400'>'React'</code> {'}'});{'\n'}
+							<code className='text-[#a5d6ff]'>'React'</code> {'}'});{'\n'}
 							{'  '}if (student.understands) {'{\n'}
-							{'    '}return <code className='text-green-400'>"Success!"</code>;
+							{'    '}return <code className='text-[#a5d6ff]'>"Success!"</code>;
 							{'\n'}
 							{'  '}
 							{'}'}
@@ -58,21 +68,35 @@ export default function PlatformMockup() {
 						{/* Blinking cursor */}
 						<motion.div
 							animate={{ opacity: [1, 0] }}
-							transition={{ repeat: Infinity, duration: 0.8 }}
-							className='w-2 h-4 bg-white mt-1'
-						></motion.div>
+							transition={{ repeat: Infinity, duration: 0.9, ease: 'linear' }}
+							className='w-2.5 h-5 bg-white/80 mt-1 rounded-sm'
+						/>
 					</div>
 
-					{/* O'ng tomon - Video Chat Preview */}
-					<div className='w-full md:w-1/3 bg-muted border-l p-4 flex flex-col gap-4'>
-						<div className='flex-1 bg-primary/10 rounded-lg border border-primary/20 flex items-center justify-center relative overflow-hidden'>
-							<span className='text-primary font-medium animate-pulse'>
-								Mentor Kamerasi
+					{/* O'ng tomon: Video Chat (Grid) */}
+					<div className='w-full md:w-[320px] bg-muted/10 border-l p-4 flex flex-col gap-4'>
+						{/* Mentor Cam */}
+						<div className='flex-1 bg-primary/5 rounded-xl border border-primary/20 flex flex-col items-center justify-center relative overflow-hidden group'>
+							<div className='absolute inset-0 bg-gradient-to-t from-primary/10 to-transparent' />
+							<div className='h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center mb-3'>
+								<span className='text-xl font-bold text-primary'>M</span>
+							</div>
+							<span className='text-sm font-semibold text-primary/80 z-10'>
+								{t('landing.mockupMentorCam') || 'Mentor ekrani'}
 							</span>
+							<div className='absolute bottom-3 left-3 flex items-center gap-1.5'>
+								<span className='relative flex h-2 w-2'>
+									<span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75' />
+									<span className='relative inline-flex rounded-full h-2 w-2 bg-red-500' />
+								</span>
+								<span className='text-[10px] font-bold text-red-500'>LIVE</span>
+							</div>
 						</div>
-						<div className='h-1/3 bg-background rounded-lg border flex items-center justify-center'>
-							<span className='text-muted-foreground text-sm'>
-								Sizning Kamerangiz
+
+						{/* Student Cam */}
+						<div className='h-[120px] bg-background rounded-xl border shadow-sm flex items-center justify-center relative overflow-hidden'>
+							<span className='text-xs font-medium text-muted-foreground'>
+								{t('landing.mockupUserCam') || 'Sizning ekraningiz'}
 							</span>
 						</div>
 					</div>

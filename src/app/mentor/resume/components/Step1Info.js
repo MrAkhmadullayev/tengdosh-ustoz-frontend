@@ -31,26 +31,30 @@ export default function Step1Info({ formData, setFormData, onNext }) {
 			setErrors(newErrors)
 			return
 		}
-
 		onNext()
 	}
 
 	return (
-		<div className='animate-in fade-in slide-in-from-right-4 duration-500'>
-			<CardHeader className='text-center px-0 pt-0'>
-				<div className='mx-auto bg-primary/10 w-16 h-16 rounded-2xl flex items-center justify-center mb-4'>
-					<Briefcase className='h-8 w-8 text-primary' />
+		<div className='animate-in fade-in slide-in-from-right-4 duration-300'>
+			<CardHeader className='text-center px-0 pt-0 pb-6'>
+				<div className='mx-auto bg-muted w-14 h-14 rounded-2xl flex items-center justify-center mb-3 border shadow-sm'>
+					<Briefcase className='h-6 w-6 text-foreground' />
 				</div>
-				<CardTitle className='text-2xl font-bold'>Asosiy ma'lumotlar</CardTitle>
+				<CardTitle className='text-2xl font-bold tracking-tight'>
+					Asosiy ma'lumotlar
+				</CardTitle>
 				<CardDescription>
 					Qaysi yo'nalishda dars berasiz va tajribangiz haqida ma'lumot
 					kiriting.
 				</CardDescription>
 			</CardHeader>
 
-			<div className='space-y-6 mt-4'>
+			<div className='space-y-6'>
 				<div className='space-y-2'>
-					<Label className={cn(errors.specialty && 'text-destructive')}>
+					<Label
+						htmlFor='specialty'
+						className={cn(errors.specialty && 'text-destructive')}
+					>
 						Mutaxassislik (Yo'nalish){' '}
 						<span className='text-destructive'>*</span>
 					</Label>
@@ -62,8 +66,9 @@ export default function Step1Info({ formData, setFormData, onNext }) {
 						}}
 					>
 						<SelectTrigger
+							id='specialty'
 							className={cn(
-								'h-12 transition-colors w-full',
+								'w-full',
 								errors.specialty && 'border-destructive focus:ring-destructive',
 							)}
 						>
@@ -93,21 +98,25 @@ export default function Step1Info({ formData, setFormData, onNext }) {
 						</SelectContent>
 					</Select>
 					{errors.specialty && (
-						<p className='text-[11px] font-medium text-destructive mt-1'>
+						<p className='text-[11px] font-medium text-destructive'>
 							{errors.specialty}
 						</p>
 					)}
 				</div>
 
 				<div className='space-y-2'>
-					<Label className={cn(errors.experience && 'text-destructive')}>
+					<Label
+						htmlFor='experience'
+						className={cn(errors.experience && 'text-destructive')}
+					>
 						Tajriba (yil) <span className='text-destructive'>*</span>
 					</Label>
 					<Input
+						id='experience'
 						type='number'
 						placeholder='Masalan: 3'
+						min={0}
 						className={cn(
-							' transition-colors',
 							errors.experience &&
 								'border-destructive focus-visible:ring-destructive',
 						)}
@@ -117,23 +126,34 @@ export default function Step1Info({ formData, setFormData, onNext }) {
 							if (errors.experience)
 								setErrors(err => ({ ...err, experience: null }))
 						}}
-						min={0}
 					/>
 					{errors.experience && (
-						<p className='text-[11px] font-medium text-destructive mt-1'>
+						<p className='text-[11px] font-medium text-destructive'>
 							{errors.experience}
 						</p>
 					)}
 				</div>
 
 				<div className='space-y-2'>
-					<Label className={cn(errors.about && 'text-destructive')}>
-						O'zingiz haqingizda <span className='text-destructive'>*</span>
+					<Label
+						htmlFor='about'
+						className={cn(
+							'flex justify-between',
+							errors.about && 'text-destructive',
+						)}
+					>
+						<span>
+							O'zingiz haqingizda <span className='text-destructive'>*</span>
+						</span>
+						<span className='text-[11px] text-muted-foreground font-normal'>
+							{formData.about?.length || 0} belgi
+						</span>
 					</Label>
 					<Textarea
+						id='about'
 						placeholder='Men Senior darajadagi dasturchiman. 5 yillik tajribaga egaman va startaplarda ishlaganman...'
 						className={cn(
-							'min-h-[120px] resize-y transition-colors',
+							'min-h-[120px] resize-y',
 							errors.about &&
 								'border-destructive focus-visible:ring-destructive',
 						)}
@@ -144,23 +164,17 @@ export default function Step1Info({ formData, setFormData, onNext }) {
 								setErrors(err => ({ ...err, about: null }))
 						}}
 					/>
-					<div className='flex justify-between mt-1'>
-						{errors.about ? (
-							<p className='text-[11px] font-medium text-destructive'>
-								{errors.about}
-							</p>
-						) : (
-							<p className='text-[11px] font-medium text-muted-foreground ml-auto'>
-								{formData.about?.length || 0} belgi kiritildi
-							</p>
-						)}
-					</div>
+					{errors.about && (
+						<p className='text-[11px] font-medium text-destructive'>
+							{errors.about}
+						</p>
+					)}
 				</div>
 
-				<div className='pt-4 flex justify-end'>
+				<div className='pt-4 flex justify-end border-t'>
 					<Button
 						onClick={validateAndNext}
-						className=' font-semibold w-full sm:w-auto shadow-md'
+						className='w-full sm:w-auto font-medium'
 					>
 						Keyingisi <ArrowRight className='ml-2 h-4 w-4' />
 					</Button>

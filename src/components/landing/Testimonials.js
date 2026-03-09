@@ -1,41 +1,56 @@
 'use client'
 
+import { useTranslation } from '@/lib/i18n'
 import { motion } from 'framer-motion'
 import { MessageSquareQuote } from 'lucide-react'
 
-const REVIEWS = [
-	"Mantiqiy masalalarni tushunishga qiynalardim, tengdoshim 10 daqiqada zo'r qilib tushuntirib berdi!",
-	'Universitetda tushunmagan mavzumni bu yerda yechimini topdim. Rahmat!',
-	"Mentor bo'lib o'zimni sinab ko'rdim. Boshqalarga o'rgatish o'zimni bilimimni ham oshirdi.",
-	"Kechasi dars qilayotganda savol tug'ilgandi, platformadan srazi javob topdim.",
-]
-
 export default function Testimonials() {
+	const { t } = useTranslation()
+
+	// Tarjimalar topilmagan holat uchun zaxira (fallback) matnlar
+	const rawReviews = t('testimonials.reviews', { returnObjects: true })
+	const REVIEWS =
+		Array.isArray(rawReviews) && rawReviews.length > 0
+			? rawReviews
+			: [
+					"TengdoshUstoz orqali o'zimga kerakli mentorni topdim va qisqa vaqt ichida dasturlashni o'rgandim. Juda zo'r platforma!",
+					'Darslar amaliyotga asoslangani uchun tezroq natijaga erishyapman. Ustozlarga kattakon rahmat.',
+					"Platformaning qulayligi va mentorlarning samimiyligi menga juda yoqdi. O'z ustimda ishlashim uchun zo'r muhit.",
+					"Boshqa kurslardan farqli o'laroq, bu yerda doimiy yordam va to'g'ri yo'llanma olish imkoni bor.",
+				]
+
 	return (
-		<section className='w-full py-16 overflow-hidden bg-background border-t'>
-			<div className='text-center mb-10 px-4'>
-				<h2 className='text-3xl font-bold'>Talabalar nima deydi?</h2>
+		<section className='relative w-full py-20 md:py-32 bg-background border-t overflow-hidden'>
+			{/* 🏷️ Header */}
+			<div className='container mx-auto px-4 md:px-8 mb-12 sm:mb-16 text-center max-w-2xl'>
+				<h2 className='text-3xl md:text-4xl font-extrabold tracking-tight text-foreground'>
+					{t('testimonials.title') || 'Foydalanuvchilarimiz fikrlari'}
+				</h2>
+				<p className='mt-4 text-muted-foreground text-base sm:text-lg'>
+					{t('testimonials.subtitle') ||
+						"Platformamiz orqali bilim olib, o'z maqsadlariga yetayotgan talabalarimiz nima deydi?"}
+				</p>
 			</div>
 
-			{/* Infinite scrolling logic using Framer Motion (yoki oddiy CSS animation) */}
-			<div className='relative w-full flex overflow-x-hidden'>
-				{/* Orqa fon chetlarini xiralashtirish (fade in/out edges) */}
-				<div className='absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-background to-transparent z-10'></div>
-				<div className='absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-background to-transparent z-10'></div>
+			{/* 🔄 Infinite Marquee (Karusel) */}
+			<div className='relative w-full flex overflow-hidden'>
+				{/* Xiralashtirish (Fade Edges) */}
+				<div className='absolute left-0 top-0 bottom-0 w-24 md:w-40 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none' />
+				<div className='absolute right-0 top-0 bottom-0 w-24 md:w-40 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none' />
 
 				<motion.div
 					animate={{ x: ['0%', '-50%'] }}
-					transition={{ repeat: Infinity, ease: 'linear', duration: 20 }}
-					className='flex gap-6 w-max px-6'
+					transition={{ repeat: Infinity, ease: 'linear', duration: 40 }}
+					className='flex gap-4 md:gap-6 w-max px-4 md:px-6'
 				>
-					{/* Duplicate reviews to make it seamless */}
+					{/* Karusel uzluksiz ishlashi uchun massivni 2 marta ulaymiz */}
 					{[...REVIEWS, ...REVIEWS].map((text, i) => (
 						<div
 							key={i}
-							className='w-[300px] md:w-[400px] bg-muted/30 p-6 rounded-2xl border flex-shrink-0'
+							className='w-[280px] md:w-[400px] bg-card p-6 md:p-8 rounded-xl border shadow-sm flex-shrink-0 flex flex-col justify-between transition-colors hover:border-primary/20'
 						>
-							<MessageSquareQuote className='w-8 h-8 text-primary/40 mb-3' />
-							<p className='text-muted-foreground font-medium leading-relaxed'>
+							<MessageSquareQuote className='w-6 h-6 md:w-8 md:h-8 text-muted-foreground/20 mb-4 shrink-0' />
+							<p className='text-foreground/80 text-sm md:text-base leading-relaxed font-medium'>
 								"{text}"
 							</p>
 						</div>

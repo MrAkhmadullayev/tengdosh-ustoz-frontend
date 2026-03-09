@@ -13,6 +13,9 @@ import {
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import api from '@/lib/api'
+import { useTranslation } from '@/lib/i18n'
+// 🔥 Markazlashgan utils
+import { getErrorMessage, getInitials } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import {
 	Award,
@@ -25,9 +28,12 @@ import {
 	TrendingUp,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 
-// --- ANIMATION VARIANTS ---
+// ==========================================
+// 🎨 ANIMATSIYALAR
+// ==========================================
 const containerVars = {
 	hidden: { opacity: 0 },
 	show: { opacity: 1, transition: { staggerChildren: 0.1 } },
@@ -42,34 +48,26 @@ const itemVars = {
 	},
 }
 
-// --- SKELETON LOADER ---
+// ==========================================
+// 🧩 SKELETON
+// ==========================================
 const DashboardSkeleton = () => (
-	<div className='max-w-6xl mx-auto space-y-6 pb-8 animate-in fade-in duration-500'>
-		<div className='flex flex-col sm:flex-row justify-between gap-4'>
+	<div className='max-w-6xl mx-auto space-y-6 pb-8 pt-6 px-4 sm:px-6 animate-pulse'>
+		<div className='flex flex-col sm:flex-row justify-between gap-4 border-b pb-6'>
 			<div className='space-y-2'>
-				<Skeleton className='h-9 w-64' />
+				<Skeleton className='h-8 w-64' />
 				<Skeleton className='h-4 w-80' />
 			</div>
 			<Skeleton className='h-10 w-[180px] rounded-md' />
 		</div>
-
 		<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
 			{[1, 2, 3, 4].map(i => (
-				<Card key={i} className='border-muted'>
-					<CardContent className='p-6 flex items-center gap-4'>
-						<Skeleton className='h-12 w-12 rounded-full shrink-0' />
-						<div className='space-y-2 w-full'>
-							<Skeleton className='h-3 w-24' />
-							<Skeleton className='h-6 w-16' />
-						</div>
-					</CardContent>
-				</Card>
+				<Skeleton key={i} className='h-28 w-full rounded-xl' />
 			))}
 		</div>
-
 		<div className='grid grid-cols-1 lg:grid-cols-3 gap-6 mt-2'>
 			<div className='lg:col-span-2'>
-				<Skeleton className='h-[200px] w-full rounded-xl' />
+				<Skeleton className='h-[250px] w-full rounded-xl' />
 			</div>
 			<div className='lg:col-span-1'>
 				<Skeleton className='h-[400px] w-full rounded-xl' />
@@ -78,36 +76,44 @@ const DashboardSkeleton = () => (
 	</div>
 )
 
+// ==========================================
+// 🚀 ASOSIY KOMPONENT
+// ==========================================
 export default function StudentDashboard() {
+	const { t } = useTranslation()
 	const router = useRouter()
+
 	const [userData, setUserData] = useState(null)
 	const [stats, setStats] = useState(null)
 	const [loading, setLoading] = useState(true)
 
-	useEffect(() => {
-		const fetchDashboardData = async () => {
-			try {
-				const [meRes, statsRes] = await Promise.all([
-					api.get('/auth/me'),
-					api.get('/student/dashboard/stats'),
-				])
+	// 1. API dan ma'lumotlarni parallel yuklash
+	const fetchDashboardData = useCallback(async () => {
+		try {
+			setLoading(true)
+			const [meRes, statsRes] = await Promise.all([
+				api.get('/auth/me').catch(() => ({ data: { success: false } })),
+				api
+					.get('/student/dashboard/stats')
+					.catch(() => ({ data: { success: false } })),
+			])
 
-				if (meRes.data.success) {
-					setUserData(meRes.data.user)
-				}
-				if (statsRes.data.success) {
-					setStats(statsRes.data.stats)
-				}
-			} catch (error) {
-				console.error("Ma'lumotlarni yuklashda xato:", error)
-			} finally {
-				setLoading(false)
-			}
+			if (meRes.data?.success) setUserData(meRes.data.user)
+			if (statsRes.data?.success) setStats(statsRes.data.stats)
+		} catch (error) {
+			toast.error(
+				getErrorMessage(error, "Ma'lumotlarni yuklashda xatolik yuz berdi"),
+			)
+		} finally {
+			setLoading(false)
 		}
-
-		fetchDashboardData()
 	}, [])
 
+	useEffect(() => {
+		fetchDashboardData()
+	}, [fetchDashboardData])
+
+	// Loading
 	if (loading) return <DashboardSkeleton />
 
 	return (
@@ -115,220 +121,214 @@ export default function StudentDashboard() {
 			variants={containerVars}
 			initial='hidden'
 			animate='show'
-			className='space-y-6 max-w-6xl mx-auto pb-8'
+			className='space-y-6 max-w-6xl mx-auto pb-12 pt-6 px-4 sm:px-6'
 		>
-			{/* --- GREETING SECTION --- */}
+			{/* 🏷️ HEADER */}
 			<motion.div
 				variants={itemVars}
-				className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'
+				className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-6'
 			>
 				<div>
 					<h1 className='text-2xl sm:text-3xl font-bold tracking-tight text-foreground'>
-						Xush kelibsiz, {userData?.firstName || 'Talaba'}! 👋
+						{t('dashboard.welcome', {
+							name: userData?.firstName || t('auth.roleStudent'),
+						})}
 					</h1>
-					<p className='text-muted-foreground mt-1 text-sm sm:text-base'>
-						Bugun nimani o'rganishni rejalashtiryapsiz? Yangi darslarni boshlang
-						va bilimlaringizni oshiring.
+					<p className='text-muted-foreground mt-1 text-sm'>
+						{t('dashboard.welcomeDesc') ||
+							'Platformadagi faoliyatingiz va rejalashtirilgan darslar.'}
 					</p>
 				</div>
 				<Button
 					onClick={() => router.push('/student/mentors')}
-					className='shrink-0 gap-2 shadow-sm'
+					className='shrink-0 gap-2 shadow-sm font-semibold'
 				>
-					<Search className='h-4 w-4' /> Yangi ustoz topish
+					<Search className='h-4 w-4' />{' '}
+					{t('dashboard.findNewMentor') || 'Yangi ustoz izlash'}
 				</Button>
 			</motion.div>
 
-			{/* --- STATS OVERVIEW --- */}
+			{/* 📊 ASOSIY KARTALAR */}
 			<motion.div
 				variants={itemVars}
 				className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'
 			>
-				{/* O'rganilgan vaqt */}
-				<Card className='border-muted shadow-sm hover:shadow-md transition-shadow group'>
-					<CardContent className='p-6 flex items-center gap-4'>
-						<div className='bg-blue-50 dark:bg-blue-500/10 p-3.5 rounded-2xl shrink-0 group-hover:scale-110 transition-transform'>
-							<Clock className='h-6 w-6 text-blue-600 dark:text-blue-500' />
-						</div>
-						<div>
-							<p className='text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5'>
-								O'rganilgan vaqt
+				<Card className='shadow-sm hover:shadow-md transition-shadow'>
+					<CardContent className='p-6'>
+						<div className='flex items-center justify-between space-y-0 pb-2'>
+							<p className='text-[11px] font-bold uppercase tracking-wider text-muted-foreground'>
+								{t('dashboard.learnedTime') || "O'rganilgan Vaqt"}
 							</p>
-							<h3 className='text-2xl font-black text-foreground'>
-								{stats?.totalHours || 0}{' '}
-								<span className='text-sm font-semibold text-muted-foreground'>
-									soat
-								</span>
-							</h3>
+							<Clock className='h-4 w-4 text-muted-foreground' />
 						</div>
+						<h3 className='text-2xl font-bold text-foreground mt-1'>
+							{stats?.totalHours || 0}{' '}
+							<span className='text-xs text-muted-foreground font-semibold lowercase tracking-normal'>
+								{t('dashboard.hours') || 'soat'}
+							</span>
+						</h3>
 					</CardContent>
 				</Card>
 
-				{/* Faol darslar */}
-				<Card className='border-muted shadow-sm hover:shadow-md transition-shadow group'>
-					<CardContent className='p-6 flex items-center gap-4'>
-						<div className='bg-emerald-50 dark:bg-emerald-500/10 p-3.5 rounded-2xl shrink-0 group-hover:scale-110 transition-transform'>
-							<BookOpen className='h-6 w-6 text-emerald-600 dark:text-emerald-500' />
-						</div>
-						<div>
-							<p className='text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5'>
-								Faol darslar
+				<Card className='shadow-sm hover:shadow-md transition-shadow'>
+					<CardContent className='p-6'>
+						<div className='flex items-center justify-between space-y-0 pb-2'>
+							<p className='text-[11px] font-bold uppercase tracking-wider text-muted-foreground'>
+								{t('dashboard.activeLessons') || 'Faol Darslar'}
 							</p>
-							<h3 className='text-2xl font-black text-foreground'>
-								{stats?.activeLessonsCount || 0}{' '}
-								<span className='text-sm font-semibold text-muted-foreground'>
-									ta
-								</span>
-							</h3>
+							<BookOpen className='h-4 w-4 text-muted-foreground' />
 						</div>
+						<h3 className='text-2xl font-bold text-foreground mt-1'>
+							{stats?.activeLessonsCount || 0}{' '}
+							<span className='text-xs text-muted-foreground font-semibold lowercase tracking-normal'>
+								{t('common.count') || 'ta'}
+							</span>
+						</h3>
 					</CardContent>
 				</Card>
 
-				{/* Haftalik o'sish */}
-				<Card className='border-muted shadow-sm hover:shadow-md transition-shadow group'>
-					<CardContent className='p-6 flex items-center gap-4'>
-						<div className='bg-purple-50 dark:bg-purple-500/10 p-3.5 rounded-2xl shrink-0 group-hover:scale-110 transition-transform'>
-							<TrendingUp className='h-6 w-6 text-purple-600 dark:text-purple-500' />
-						</div>
-						<div>
-							<p className='text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5'>
-								Haftalik o'sish
+				<Card className='shadow-sm hover:shadow-md transition-shadow'>
+					<CardContent className='p-6'>
+						<div className='flex items-center justify-between space-y-0 pb-2'>
+							<p className='text-[11px] font-bold uppercase tracking-wider text-muted-foreground'>
+								{t('dashboard.weeklyGrowth') || "Haftalik O'sish"}
 							</p>
-							<h3 className='text-2xl font-black text-foreground'>
-								{stats?.weeklyGrowth || '+0%'}
-							</h3>
+							<TrendingUp className='h-4 w-4 text-muted-foreground' />
 						</div>
+						<h3 className='text-2xl font-bold text-foreground mt-1'>
+							{stats?.weeklyGrowth || '+0%'}
+						</h3>
 					</CardContent>
 				</Card>
 
-				{/* Top Reytingi */}
-				<Card className='border-muted shadow-sm hover:shadow-md transition-all group overflow-hidden relative cursor-default'>
-					<div className='absolute -right-6 -top-6 bg-amber-500/10 w-24 h-24 rounded-full blur-2xl group-hover:scale-150 transition-transform'></div>
-					<CardContent className='p-6 flex items-center gap-4 relative z-10'>
-						<div className='bg-amber-50 dark:bg-amber-500/10 p-3.5 rounded-2xl shrink-0 group-hover:scale-110 transition-transform'>
-							<Award className='h-6 w-6 text-amber-600 dark:text-amber-500' />
-						</div>
-						<div>
-							<p className='text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5'>
-								Platformadagi O'rnim
+				<Card className='shadow-sm hover:shadow-md transition-shadow relative overflow-hidden bg-card'>
+					<div className='absolute -right-6 -top-6 bg-primary/10 w-24 h-24 rounded-full blur-2xl pointer-events-none' />
+					<CardContent className='p-6 relative z-10'>
+						<div className='flex items-center justify-between space-y-0 pb-2'>
+							<p className='text-[11px] font-bold uppercase tracking-wider text-muted-foreground'>
+								{t('dashboard.myPlatformRank') || 'Reytingingiz'}
 							</p>
-							<h3 className='text-2xl font-black text-foreground'>
-								{stats?.rating || "Yo'q"}
-							</h3>
+							<Award className='h-4 w-4 text-amber-500' />
 						</div>
+						<h3 className='text-2xl font-bold text-foreground mt-1'>
+							{stats?.rating || t('dashboard.none') || "Yo'q"}
+						</h3>
 					</CardContent>
 				</Card>
 			</motion.div>
 
-			{/* --- CONTENT GRID --- */}
+			{/* 📚 ASOSIY QISM */}
 			<div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
-				{/* CHAP TOMON: KUTILAYOTGAN DARSLAR (2/3 QISM) */}
+				{/* CHAP: KEYINGI DARS */}
 				<motion.div variants={itemVars} className='lg:col-span-2 space-y-6'>
 					{stats?.nextLesson ? (
-						<Card className='border-primary/20 bg-primary/5 shadow-sm relative overflow-hidden'>
-							{/* Blur background effect */}
-							<div className='absolute right-0 top-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none'></div>
-
-							<CardHeader className='pb-3 relative z-10'>
+						<Card className='shadow-md border-primary/20 bg-card overflow-hidden'>
+							<CardHeader className='pb-3 border-b bg-muted/20'>
 								<div className='flex justify-between items-center'>
-									<CardTitle className='text-base flex items-center gap-2 font-bold'>
-										<Calendar className='h-5 w-5 text-primary' /> Keyingi
-										darsingiz
+									<CardTitle className='text-base flex items-center gap-2'>
+										<Calendar className='h-4 w-4 text-primary' />{' '}
+										{t('dashboard.nextLesson') || 'Keyingi Dars'}
 									</CardTitle>
 									{stats.nextLesson.isLive && (
-										<Badge className='bg-red-500 hover:bg-red-600 animate-pulse text-white border-none shadow-sm px-3'>
-											Efirda
+										<Badge
+											variant='destructive'
+											className='animate-pulse uppercase tracking-wider text-[10px] px-2 shadow-none border-transparent'
+										>
+											{t('dashboard.live') || 'Live'}
 										</Badge>
 									)}
 								</div>
 							</CardHeader>
-
-							<CardContent className='relative z-10'>
-								<div className='bg-background rounded-xl p-5 border shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 group'>
-									<div className='flex items-center gap-4'>
-										<div className='bg-primary/10 p-4 rounded-2xl hidden sm:block border border-primary/20 group-hover:scale-105 transition-transform'>
-											<Smartphone className='h-6 w-6 text-primary' />
+							<CardContent className='p-6'>
+								<div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group'>
+									<div className='flex items-center gap-4 min-w-0'>
+										<div className='bg-primary/10 p-3.5 rounded-xl hidden sm:flex items-center justify-center shrink-0 text-primary'>
+											<Smartphone className='h-6 w-6' />
 										</div>
-										<div>
-											<h4 className='font-bold text-lg leading-tight mb-2'>
+										<div className='min-w-0'>
+											<h4 className='font-bold text-lg leading-tight mb-2 truncate'>
 												{stats.nextLesson.title}
 											</h4>
-											<div className='flex items-center gap-2 text-sm font-medium text-muted-foreground'>
-												<Avatar className='h-6 w-6 border'>
-													<AvatarFallback className='text-[10px] bg-primary/10 text-primary font-bold'>
-														{stats.nextLesson.mentorName
-															?.charAt(0)
-															?.toUpperCase() || 'M'}
+											<div className='flex flex-wrap items-center gap-2 text-xs text-muted-foreground font-medium'>
+												<Avatar className='h-5 w-5 border'>
+													<AvatarFallback className='text-[9px] bg-muted text-foreground'>
+														{getInitials(stats.nextLesson.mentorName, '')}
 													</AvatarFallback>
 												</Avatar>
-												<span>
-													Ustoz:{' '}
+												<span className='truncate'>
+													{t('dashboard.mentor') || 'Ustoz'}:{' '}
 													<span className='text-foreground'>
 														{stats.nextLesson.mentorName}
 													</span>
 												</span>
-												<span className='opacity-50'>•</span>
+												<span className='opacity-50 hidden sm:inline'>•</span>
 												<span className='capitalize'>
 													{stats.nextLesson.mentorFormat}
 												</span>
 											</div>
 											<Badge
 												variant='secondary'
-												className='mt-3 font-mono font-bold bg-primary/10 text-primary border-none'
+												className='mt-3 font-mono font-medium shadow-none'
 											>
-												Vaqti: {stats.nextLesson.time}
+												{t('dashboard.time') || 'Vaqt'}: {stats.nextLesson.time}
 											</Badge>
 										</div>
 									</div>
 									<Button
 										size='lg'
-										className='w-full sm:w-auto gap-2 shadow-sm font-semibold'
+										className='w-full sm:w-auto shrink-0 font-semibold'
 										onClick={() =>
 											router.push(
 												`/student/lessons/${stats.nextLesson.id}/watch`,
 											)
 										}
 									>
-										<PlayCircle className='h-5 w-5' /> Darsga qo'shilish
+										<PlayCircle className='h-4 w-4 mr-2' />{' '}
+										{t('dashboard.joinLesson') || 'Darsga Kirish'}
 									</Button>
 								</div>
 							</CardContent>
 						</Card>
 					) : (
-						<Card className='border-dashed bg-muted/10 shadow-sm'>
-							<CardContent className='py-16 text-center text-muted-foreground flex flex-col items-center justify-center gap-3'>
-								<div className='bg-muted p-4 rounded-full'>
-									<Calendar className='h-8 w-8 opacity-40' />
+						<Card className='border-dashed bg-muted/10 shadow-none'>
+							<CardContent className='py-16 text-center text-muted-foreground flex flex-col items-center justify-center gap-2'>
+								<div className='bg-background p-4 rounded-full border shadow-sm mb-2'>
+									<Calendar className='h-6 w-6 opacity-50' />
 								</div>
-								<p className='font-medium text-foreground'>
-									Hozircha rejalashtirilgan yangi darslar yo'q.
+								<p className='font-bold text-foreground'>
+									{t('dashboard.noLessonsPlanned') ||
+										"Rejalashtirilgan darslar yo'q"}
 								</p>
-								<p className='text-sm'>Yangi darslarni o'rganishni boshlang.</p>
+								<p className='text-sm max-w-xs'>
+									{t('dashboard.startLearning') ||
+										"Yangi bilimlarni o'rganish uchun darslarga yoziling."}
+								</p>
 								<Button
 									variant='outline'
 									onClick={() => router.push('/student/mentors')}
-									className='mt-2'
+									className='mt-4 font-medium'
 								>
-									Yangi dars izlash
+									{t('dashboard.searchNewLesson') || "Ustozlarni ko'rish"}
 								</Button>
 							</CardContent>
 						</Card>
 					)}
 				</motion.div>
 
-				{/* O'NG TOMON: TAVSIYA ETILGAN USTOZLAR (1/3 QISM) */}
+				{/* O'NG: TAVSIYA ETILGAN USTOZLAR */}
 				<motion.div variants={itemVars} className='lg:col-span-1'>
-					<Card className='shadow-sm h-full flex flex-col'>
+					<Card className='shadow-sm h-full flex flex-col bg-card'>
 						<CardHeader className='pb-4 border-b bg-muted/20'>
-							<CardTitle className='text-base font-bold'>
-								Siz uchun tavsiyalar
+							<CardTitle className='text-base'>
+								{t('dashboard.recommendations') || 'Tavsiya etilgan ustozlar'}
 							</CardTitle>
 							<CardDescription className='text-xs'>
-								Qiziqishlaringizga mos mutaxassislar.
+								{t('dashboard.recommendationsDesc') ||
+									"Sizning yo'nalishingizga mos mutaxassislar"}
 							</CardDescription>
 						</CardHeader>
-						<CardContent className='flex-1 p-0 overflow-y-auto custom-scrollbar'>
-							<div className='divide-y divide-muted'>
+						<CardContent className='flex-1 p-0 overflow-y-auto no-scrollbar'>
+							<div className='divide-y'>
 								{stats?.recommendedMentors &&
 								stats.recommendedMentors.length > 0 ? (
 									stats.recommendedMentors.map((mentor, idx) => (
@@ -340,45 +340,46 @@ export default function StudentDashboard() {
 											className='flex items-center justify-between p-4 hover:bg-muted/30 transition-colors cursor-pointer group'
 										>
 											<div className='flex items-center gap-3 min-w-0'>
-												<Avatar className='h-10 w-10 border border-background shadow-sm shrink-0'>
-													<AvatarFallback className='bg-primary/10 text-primary font-bold text-xs'>
-														{mentor.avatar}
+												<Avatar className='h-10 w-10 border shrink-0'>
+													<AvatarFallback className='text-[10px] font-bold bg-muted text-foreground'>
+														{getInitials(mentor.name, '')}
 													</AvatarFallback>
 												</Avatar>
 												<div className='min-w-0'>
-													<p className='font-bold text-sm leading-tight truncate group-hover:text-primary transition-colors'>
+													<p className='font-semibold text-sm leading-tight truncate group-hover:text-primary transition-colors'>
 														{mentor.name}
 													</p>
-													<p className='text-[11px] font-medium text-muted-foreground truncate mt-0.5'>
+													<p className='text-xs text-muted-foreground truncate mt-0.5'>
 														{mentor.skill}
 													</p>
 												</div>
 											</div>
 											<Badge
-												variant='secondary'
-												className='bg-amber-500/10 text-amber-600 dark:text-amber-400 border-none font-bold shrink-0 ml-2'
+												variant='outline'
+												className='text-amber-500 bg-amber-500/10 border-transparent shadow-none shrink-0 ml-2'
 											>
 												★ {mentor.rating}
 											</Badge>
 										</div>
 									))
 								) : (
-									<div className='py-12 text-center text-muted-foreground text-sm'>
-										Hozircha tavsiyalar mavjud emas.
+									<div className='py-12 flex flex-col items-center justify-center text-center text-muted-foreground text-sm opacity-60'>
+										<Search className='h-8 w-8 mb-2' />
+										{t('dashboard.noRecommendations') || "Tavsiyalar yo'q"}
 									</div>
 								)}
 							</div>
 						</CardContent>
 						{stats?.recommendedMentors &&
 							stats.recommendedMentors.length > 0 && (
-								<CardFooter className='p-3 border-t mt-auto'>
+								<CardFooter className='p-3 border-t mt-auto bg-muted/10'>
 									<Button
 										variant='ghost'
 										size='sm'
 										onClick={() => router.push('/student/mentors')}
 										className='w-full text-xs font-semibold'
 									>
-										Barcha ustozlarni ko'rish
+										{t('dashboard.viewAllMentors') || "Barchasini ko'rish"}
 									</Button>
 								</CardFooter>
 							)}

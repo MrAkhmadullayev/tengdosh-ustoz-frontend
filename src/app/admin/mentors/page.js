@@ -3,6 +3,7 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { DataTable } from '@/components/ui/data-table'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -11,45 +12,40 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Input } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from '@/components/ui/table'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { PageHeader } from '@/components/ui/page-header'
 import api from '@/lib/api'
+import { useTranslation } from '@/lib/i18n'
+import { formatPhone, getErrorMessage, getInitials } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import {
 	CheckCircle2,
 	Download,
 	Edit,
 	Eye,
+	Loader2,
 	MoreHorizontal,
 	Phone,
-	Search,
 	ShieldBan,
 	Star,
 	Trash2,
 	Users,
 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import DeleteMentorModal from './actions/DeleteMentor'
 
+// ==========================================
+// 🎨 ANIMATSIYALAR
+// ==========================================
 const containerVariants = {
 	hidden: { opacity: 0 },
-	show: {
-		opacity: 1,
-		transition: { staggerChildren: 0.1 },
-	},
+	show: { opacity: 1, transition: { staggerChildren: 0.1 } },
 }
 
 const itemVariants = {
-	hidden: { opacity: 0, y: 20 },
+	hidden: { opacity: 0, y: 15 },
 	show: {
 		opacity: 1,
 		y: 0,
@@ -57,460 +53,423 @@ const itemVariants = {
 	},
 }
 
-// Framer motion bilan TableRow ishlashi uchun maxsus wrapper
-const MotionTableRow = motion(TableRow)
-
-// Telefon raqamini formatlash: +998XXXXXXXXX -> +998 XX XXX XXXX
-const formatPhone = phoneStr => {
-	if (!phoneStr || phoneStr === 'Kiritilmagan') return phoneStr
-	const cleaned = phoneStr.replace(/\D/g, '')
-	if (cleaned.length === 12 && cleaned.startsWith('998')) {
-		return `+998 ${cleaned.slice(3, 5)} ${cleaned.slice(5, 8)} ${cleaned.slice(8, 12)}`
-	}
-	return phoneStr
-}
-
+// ==========================================
+// 🚀 ASOSIY KOMPONENT (Content)
+// ==========================================
 function AdminMentorsContent() {
 	const router = useRouter()
+	const { t } = useTranslation()
 	const searchParams = useSearchParams()
 	const actionType = searchParams.get('action')
 
-	const [searchQuery, setSearchQuery] = useState('')
 	const [mentors, setMentors] = useState([])
 	const [isLoading, setIsLoading] = useState(true)
+	const [isExporting, setIsExporting] = useState(false)
 
-	useEffect(() => {
-		const fetchMentors = async () => {
-			try {
-				const res = await api.get('/admin/mentors')
-				if (res?.data?.success) {
-					const mapped = res.data.mentors.map((m, index) => ({
-						id: m.id || m._id,
-						index: index + 1,
-						name: `${m.firstName} ${m.lastName}`,
-						course: m.course || 'Kurs kiritilmagan',
-						group: m.group || 'Kiritilmagan',
-						phoneNumber: m.phoneNumber || 'Kiritilmagan',
-						rating: m.rating || 0,
-						ratingCount: m.ratingCount || 0,
-						followersCount: m.followersCount || 0,
-						status: m.status || 'active',
-						joinedDate: new Date(m.createdAt).toLocaleDateString('uz-UZ'),
-						avatar:
-							(m.firstName?.charAt(0) || '') + (m.lastName?.charAt(0) || ''),
-					}))
-					setMentors(mapped)
-				}
-			} catch (err) {
-				console.error('Failed to fetch mentors', err)
-			} finally {
-				setIsLoading(false)
-			}
-		}
-
-		fetchMentors()
-	}, [])
-
-	const handleToggleStatus = async (id, currentStatus) => {
+	// 1. API dan ma'lumotlarni tortish
+	const fetchMentors = useCallback(async () => {
 		try {
-			const newStatus = currentStatus === 'active' ? 'blocked' : 'active'
-			const res = await api.put(`/admin/mentors/${id}/status`, {
-				status: newStatus,
-			})
-			if (res.data.success) {
-				setMentors(prev =>
-					prev.map(m => (m.id === id ? { ...m, status: newStatus } : m)),
-				)
+			const res = await api.get('/admin/mentors')
+			if (res?.data?.success) {
+				const mapped = res.data.mentors.map((m, index) => ({
+					id: m.id || m._id,
+					index: index + 1,
+					firstName: m.firstName || '',
+					lastName: m.lastName || '',
+					name: `${m.firstName || ''} ${m.lastName || ''}`.trim(),
+					course: m.course || t('common.notEntered') || 'Kiritilmagan',
+					group: m.group || t('common.notEntered') || '-',
+					phoneNumber: m.phoneNumber || '',
+					rating: m.rating || 0,
+					ratingCount: m.ratingCount || 0,
+					followersCount: m.followersCount || 0,
+					status: m.status || 'active',
+					joinedDate: new Date(m.createdAt).toLocaleDateString('uz-UZ'),
+				}))
+				setMentors(mapped)
 			}
 		} catch (err) {
-			console.error('Status yangilashda xatolik:', err)
-			alert('Statusni yangilashda xatolik yuz berdi')
+			toast.error(
+				getErrorMessage(
+					err,
+					t('errors.fetchFailed') || "Ma'lumotlarni yuklashda xatolik",
+				),
+			)
+		} finally {
+			setIsLoading(false)
+		}
+	}, [t])
+
+	useEffect(() => {
+		fetchMentors()
+	}, [fetchMentors])
+
+	// 🔥 2. OPTIMISTIK STATUS O'ZGARTIRISH (Refreshsiz)
+	const handleToggleStatus = async (id, currentStatus) => {
+		const newStatus = currentStatus === 'active' ? 'blocked' : 'active'
+
+		const promise = api
+			.put(`/admin/mentors/${id}/status`, { status: newStatus })
+			.then(res => {
+				if (res.data.success) {
+					// UI darhol yangilanadi
+					setMentors(prev =>
+						prev.map(m => (m.id === id ? { ...m, status: newStatus } : m)),
+					)
+				}
+			})
+
+		toast.promise(promise, {
+			loading: t('common.updating') || 'Yangilanmoqda...',
+			success: t('common.updateSuccess') || 'Muvaffaqiyatli yangilandi',
+			error: err =>
+				getErrorMessage(err, t('errors.updateFailed') || 'Xatolik yuz berdi'),
+		})
+	}
+
+	// 🔥 3. OPTIMISTIK O'CHIRISH (Modal ichidan chaqiriladi, refresh qilinmaydi)
+	const handleDeleteSuccess = useCallback(deletedId => {
+		setMentors(prev => {
+			const filtered = prev.filter(m => m.id !== deletedId)
+			// T/R (Index) larni qayta tartiblaymiz
+			return filtered.map((m, idx) => ({ ...m, index: idx + 1 }))
+		})
+	}, [])
+
+	// 4. EXCEL GA YUKLASH (Xavfsiz)
+	const isTableEmpty = mentors.length === 0
+
+	const handleExportExcel = async () => {
+		if (isTableEmpty) return toast.warning("Eksport qilish uchun ma'lumot yo'q")
+
+		setIsExporting(true)
+		try {
+			const headers = [
+				'T/R',
+				'Ism va Familiya',
+				"Yo'nalish",
+				'Telefon raqami',
+				'Guruh',
+				'Reyting',
+				'Talabalar',
+				'Status',
+				"Qo'shilgan sana",
+			]
+
+			const csvContent = [
+				headers.join(','),
+				...mentors.map(m =>
+					[
+						m.index,
+						`"${m.name}"`,
+						`"${m.course}"`,
+						`"${formatPhone(m.phoneNumber)}"`,
+						`"${m.group}"`,
+						m.rating > 0 ? m.rating : 'Yangi',
+						m.followersCount,
+						m.status === 'active' ? 'Faol' : 'Bloklangan',
+						`"${m.joinedDate}"`,
+					].join(','),
+				),
+			].join('\n')
+
+			const blob = new Blob(['\ufeff' + csvContent], {
+				type: 'text/csv;charset=utf-8;',
+			})
+			const url = URL.createObjectURL(blob)
+			const link = document.createElement('a')
+			link.href = url
+			link.setAttribute(
+				'download',
+				`Mentorlar_${new Date().toLocaleDateString('uz-UZ')}.csv`,
+			)
+			document.body.appendChild(link)
+			link.click()
+			document.body.removeChild(link)
+
+			toast.success(t('common.exportSuccess') || 'Muvaffaqiyatli yuklab olindi')
+		} catch (error) {
+			toast.error(t('errors.exportFailed') || 'Yuklab olishda xatolik')
+		} finally {
+			setIsExporting(false)
 		}
 	}
 
-	const filteredMentors = mentors.filter(
-		mentor =>
-			mentor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			mentor.course.toLowerCase().includes(searchQuery.toLowerCase()),
+	const activeCount = useMemo(
+		() => mentors.filter(m => m.status === 'active').length,
+		[mentors],
 	)
 
-	const activeFilteredCount = filteredMentors.filter(
-		m => m.status === 'active',
-	).length
+	// 5. JADVAL USTUNLARI (Columns)
+	const columns = useMemo(
+		() => [
+			{
+				header: 'T/R',
+				key: 'index',
+				headerClassName: 'w-[60px]',
+				cellClassName: 'font-medium text-muted-foreground',
+			},
+			{
+				header: t('sidebar.mentors') || 'Mentorlar',
+				key: 'name',
+				render: row => (
+					<div className='flex items-center gap-3'>
+						<Avatar className='h-9 w-9 border border-border shadow-sm'>
+							<AvatarFallback className='bg-primary/10 text-primary font-bold text-xs'>
+								{getInitials(row.firstName, row.lastName)}
+							</AvatarFallback>
+						</Avatar>
+						<div>
+							<p
+								className='font-semibold text-foreground leading-none mb-1 cursor-pointer hover:text-primary transition-colors'
+								onClick={e => {
+									e.stopPropagation()
+									router.push(`/admin/mentors/${row.id}/view`)
+								}}
+							>
+								{row.name}
+							</p>
+							<p className='text-xs text-muted-foreground'>{row.course}</p>
+						</div>
+					</div>
+				),
+			},
+			{
+				header: t('mentors.phone') || 'Telefon',
+				key: 'phoneNumber',
+				render: row =>
+					row.phoneNumber ? (
+						<a
+							href={`tel:${row.phoneNumber.replace(/\D/g, '')}`}
+							className='font-medium whitespace-nowrap text-primary hover:underline flex items-center gap-1.5 w-fit'
+							onClick={e => e.stopPropagation()}
+						>
+							<Phone className='h-3.5 w-3.5' />
+							{formatPhone(row.phoneNumber)}
+						</a>
+					) : (
+						<span className='text-muted-foreground text-sm'>
+							{t('common.notEntered') || '-'}
+						</span>
+					),
+			},
+			{
+				header: t('mentors.group') || 'Guruh',
+				key: 'group',
+				render: row => <span className='font-medium'>{row.group}</span>,
+			},
+			{
+				header: t('mentors.rating') || 'Reyting',
+				key: 'rating',
+				headerClassName: 'text-center',
+				cellClassName: 'text-center',
+				render: row =>
+					row.rating > 0 ? (
+						<Badge
+							variant='secondary'
+							className='bg-yellow-500/15 text-yellow-600 dark:text-yellow-500 border-none font-bold'
+						>
+							<Star className='h-3.5 w-3.5 mr-1 fill-yellow-600 dark:fill-yellow-500' />
+							{row.rating}
+							<span className='text-[10px] font-normal ml-1 opacity-70'>
+								({row.ratingCount})
+							</span>
+						</Badge>
+					) : (
+						<Badge
+							variant='outline'
+							className='text-muted-foreground font-medium bg-muted/50'
+						>
+							{t('common.new') || 'Yangi'}
+						</Badge>
+					),
+			},
+			{
+				header: t('mentors.students') || 'Talabalar',
+				key: 'followersCount',
+				headerClassName: 'text-center',
+				cellClassName: 'text-center',
+				render: row => (
+					<div className='flex items-center justify-center gap-1.5'>
+						<Users className='h-4 w-4 text-muted-foreground' />
+						<span className='font-semibold'>{row.followersCount}</span>
+					</div>
+				),
+			},
+			{
+				header: t('common.status') || 'Status',
+				key: 'status',
+				render: row =>
+					row.status === 'active' ? (
+						<Badge className='bg-green-500/15 text-green-700 dark:text-green-400 border-none font-medium flex w-fit items-center gap-1.5 shadow-none'>
+							<CheckCircle2 className='h-3.5 w-3.5' />{' '}
+							{t('common.active') || 'Faol'}
+						</Badge>
+					) : (
+						<Badge
+							variant='secondary'
+							className='bg-destructive/15 text-destructive border-none font-medium flex w-fit items-center gap-1.5 shadow-none'
+						>
+							<ShieldBan className='h-3.5 w-3.5' />{' '}
+							{t('common.blocked') || 'Bloklangan'}
+						</Badge>
+					),
+			},
+			{
+				header: t('common.actions') || 'Amallar',
+				key: 'actions',
+				headerClassName: 'text-right',
+				cellClassName: 'text-right',
+				render: row => (
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+							<Button
+								variant='ghost'
+								size='icon'
+								className='h-8 w-8 text-muted-foreground hover:text-foreground'
+							>
+								<MoreHorizontal className='h-4 w-4' />
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent
+							align='end'
+							className='w-48'
+							onClick={e => e.stopPropagation()}
+						>
+							<DropdownMenuLabel>
+								{t('common.actions') || 'Amallar'}
+							</DropdownMenuLabel>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem
+								className='cursor-pointer'
+								onClick={() => router.push(`/admin/mentors/${row.id}/view`)}
+							>
+								<Eye className='h-4 w-4 mr-2 text-muted-foreground' />{' '}
+								{t('common.view') || "Ko'rish"}
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								className='cursor-pointer'
+								onClick={() => router.push(`/admin/mentors/${row.id}/edit`)}
+							>
+								<Edit className='h-4 w-4 mr-2 text-muted-foreground' />{' '}
+								{t('common.edit') || 'Tahrirlash'}
+							</DropdownMenuItem>
 
-	const handleExportExcel = () => {
-		const headers = [
-			'T/R',
-			'Ism va Familiya',
-			"Yo'nalish",
-			'Telefon raqami',
-			'Guruh',
-			'Reyting',
-			'Talabalar',
-			'Status',
-			"Qo'shilgan sana",
-		]
-		const csvContent = [
-			headers.join(','),
-			...filteredMentors.map(m =>
-				[
-					m.index,
-					`"${m.name}"`,
-					`"${m.course}"`,
-					`"${formatPhone(m.phoneNumber)}"`,
-					`"${m.group}"`,
-					m.rating > 0 ? m.rating : 'Yangi',
-					m.followersCount,
-					m.status === 'active' ? 'Faol' : 'Bloklangan',
-					`"${m.joinedDate}"`,
-				].join(','),
-			),
-		].join('\n')
+							<DropdownMenuSeparator />
 
-		const blob = new Blob(['\ufeff' + csvContent], {
-			type: 'text/csv;charset=utf-8;',
-		})
-		const url = URL.createObjectURL(blob)
-		const link = document.createElement('a')
-		link.href = url
-		link.setAttribute('download', 'Mentorlar_royxati.xlsx')
-		document.body.appendChild(link)
-		link.click()
-		document.body.removeChild(link)
-	}
+							{row.status === 'active' ? (
+								<DropdownMenuItem
+									className='cursor-pointer text-orange-600 focus:text-orange-600'
+									onClick={() => handleToggleStatus(row.id, row.status)}
+								>
+									<ShieldBan className='h-4 w-4 mr-2' />{' '}
+									{t('mentors.block') || 'Bloklash'}
+								</DropdownMenuItem>
+							) : (
+								<DropdownMenuItem
+									className='cursor-pointer text-green-600 focus:text-green-600'
+									onClick={() => handleToggleStatus(row.id, row.status)}
+								>
+									<CheckCircle2 className='h-4 w-4 mr-2' />{' '}
+									{t('mentors.unblock') || 'Blokdan chiqarish'}
+								</DropdownMenuItem>
+							)}
+
+							<DropdownMenuSeparator />
+							<DropdownMenuItem
+								className='cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10'
+								onClick={() =>
+									router.push(`/admin/mentors?action=delete&id=${row.id}`)
+								}
+							>
+								<Trash2 className='h-4 w-4 mr-2' />{' '}
+								{t('mentors.removeMentor') || "O'chirish"}
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+				),
+			},
+		],
+		[t, router],
+	)
 
 	return (
 		<motion.div
 			variants={containerVariants}
 			initial='hidden'
 			animate='show'
-			className='space-y-6 max-w-7xl mx-auto pb-8'
+			className='space-y-6 max-w-7xl mx-auto pb-8 pt-2'
 		>
-			<motion.div
-				variants={itemVariants}
-				className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'
-			>
-				<div>
-					<h1 className='text-2xl sm:text-3xl font-bold tracking-tight text-foreground'>
-						Mentorlar ro'yxati
-					</h1>
-					<p className='text-muted-foreground mt-1'>
-						Tizimda tasdiqlangan va faoliyat yuritayotgan barcha ustozlarni
-						boshqarish.
-					</p>
-				</div>
-				<div className='flex w-full sm:w-auto gap-2'>
-					<Button
-						variant='outline'
-						className='shrink-0 gap-2 hover:bg-green-50 hover:text-green-600 hover:border-green-200 transition-colors'
-						onClick={handleExportExcel}
-						disabled={isLoading || filteredMentors.length === 0}
-					>
-						<Download className='h-4 w-4' /> Export (Excel)
-					</Button>
-				</div>
-			</motion.div>
+			<PageHeader
+				title={t('mentors.title') || 'Mentorlar'}
+				description={
+					t('mentors.description') || 'Barcha mentorlarni boshqarish'
+				}
+				actionText={
+					isExporting
+						? t('common.exporting') || 'Yuklanmoqda...'
+						: t('mentors.exportExcel') || 'Excel ga yuklash'
+				}
+				actionIcon={isExporting ? Loader2 : Download}
+				onAction={handleExportExcel}
+				buttonClassName='bg-background text-foreground border shadow-sm hover:bg-accent transition-colors'
+				disabled={isExporting || isLoading || isTableEmpty}
+			/>
 
-			<motion.div
-				variants={itemVariants}
-				className='flex flex-col sm:flex-row sm:items-center justify-between bg-card p-4 rounded-xl border shadow-sm gap-4'
-			>
-				<div className='relative w-full max-w-sm'>
-					<Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
-					<Input
-						placeholder="Ism, ID yoki yo'nalish bo'yicha qidiruv..."
-						className='pl-9 bg-background'
-						value={searchQuery}
-						onChange={e => setSearchQuery(e.target.value)}
-					/>
-				</div>
-				<div className='flex items-center gap-2'>
-					<Badge variant='secondary' className='px-3 py-1 text-sm font-medium'>
-						Barchasi: {filteredMentors.length}
-					</Badge>
-					<Badge className='bg-green-500/10 text-green-600 hover:bg-green-500/20 border-none px-3 py-1 text-sm font-medium'>
-						Faol: {activeFilteredCount}
-					</Badge>
-				</div>
-			</motion.div>
-
-			<motion.div
-				variants={itemVariants}
-				className='bg-card rounded-xl border shadow-sm overflow-hidden'
-			>
-				<div className='overflow-x-auto'>
-					<Table>
-						<TableHeader className='bg-muted/50'>
-							<TableRow>
-								<TableHead className='w-[80px]'>T/R</TableHead>
-								<TableHead>Mentor</TableHead>
-								<TableHead>Telefon raqami</TableHead>
-								<TableHead>Guruh</TableHead>
-								<TableHead className='text-center'>Reyting</TableHead>
-								<TableHead className='text-center'>Talabalar</TableHead>
-								<TableHead>Status</TableHead>
-								<TableHead className='text-right'>Harakatlar</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{isLoading ? (
-								Array.from({ length: 4 }).map((_, idx) => (
-									<TableRow key={idx}>
-										<TableCell>
-											<Skeleton className='h-4 w-6' />
-										</TableCell>
-										<TableCell>
-											<div className='flex items-center gap-3'>
-												<Skeleton className='h-9 w-9 rounded-full shrink-0' />
-												<div className='space-y-2'>
-													<Skeleton className='h-4 w-32' />
-													<Skeleton className='h-3 w-24' />
-												</div>
-											</div>
-										</TableCell>
-										<TableCell>
-											<Skeleton className='h-4 w-28' />
-										</TableCell>
-										<TableCell>
-											<Skeleton className='h-4 w-16' />
-										</TableCell>
-										<TableCell>
-											<Skeleton className='h-5 w-16 mx-auto rounded-full' />
-										</TableCell>
-										<TableCell>
-											<Skeleton className='h-5 w-12 mx-auto rounded-full' />
-										</TableCell>
-										<TableCell>
-											<Skeleton className='h-5 w-20 rounded-full' />
-										</TableCell>
-										<TableCell className='text-right'>
-											<Skeleton className='h-8 w-8 ml-auto rounded-md' />
-										</TableCell>
-									</TableRow>
-								))
-							) : filteredMentors.length > 0 ? (
-								filteredMentors.map(mentor => (
-									<MotionTableRow
-										key={mentor.id}
-										variants={itemVariants}
-										className='hover:bg-muted/30 transition-colors cursor-pointer'
-										onClick={() =>
-											router.push(`/admin/mentors/${mentor.id}/view`)
-										}
-									>
-										<TableCell className='font-medium text-muted-foreground'>
-											{mentor.index}
-										</TableCell>
-
-										<TableCell>
-											<div className='flex items-center gap-3'>
-												<Avatar className='h-9 w-9 border border-background shadow-sm'>
-													<AvatarFallback className='bg-primary/10 text-primary font-bold text-xs'>
-														{mentor.avatar}
-													</AvatarFallback>
-												</Avatar>
-												<div>
-													<p className='font-semibold text-foreground leading-none mb-1 group-hover:text-primary transition-colors'>
-														{mentor.name}
-													</p>
-													<p className='text-xs text-muted-foreground'>
-														{mentor.course}
-													</p>
-												</div>
-											</div>
-										</TableCell>
-
-										<TableCell onClick={e => e.stopPropagation()}>
-											{mentor.phoneNumber &&
-											mentor.phoneNumber !== 'Kiritilmagan' ? (
-												<a
-													href={`tel:${mentor.phoneNumber.replace(/\s+/g, '')}`}
-													className='font-medium whitespace-nowrap text-primary hover:underline flex items-center gap-1.5 w-fit'
-												>
-													<Phone className='h-3.5 w-3.5' />
-													{formatPhone(mentor.phoneNumber)}
-												</a>
-											) : (
-												<span className='text-muted-foreground text-sm'>
-													Kiritilmagan
-												</span>
-											)}
-										</TableCell>
-
-										<TableCell>
-											<span className='font-medium'>{mentor.group}</span>
-										</TableCell>
-
-										<TableCell className='text-center'>
-											{mentor.rating > 0 ? (
-												<Badge
-													variant='secondary'
-													className='bg-yellow-500/10 text-yellow-600 border-none font-bold'
-												>
-													<Star className='h-3 w-3 mr-1 fill-yellow-600' />
-													{mentor.rating}
-													<span className='text-[10px] font-normal ml-1 opacity-70'>
-														({mentor.ratingCount})
-													</span>
-												</Badge>
-											) : (
-												<Badge
-													variant='outline'
-													className='text-muted-foreground font-medium'
-												>
-													Yangi
-												</Badge>
-											)}
-										</TableCell>
-
-										<TableCell className='text-center'>
-											<div className='flex items-center justify-center gap-1.5'>
-												<Users className='h-3.5 w-3.5 text-muted-foreground' />
-												<span className='font-semibold'>
-													{mentor.followersCount}
-												</span>
-											</div>
-										</TableCell>
-
-										<TableCell>
-											{mentor.status === 'active' ? (
-												<Badge className='bg-green-500/10 text-green-600 border-green-500/20 shadow-none font-medium flex w-fit items-center gap-1.5'>
-													<CheckCircle2 className='h-3.5 w-3.5' /> Faol
-												</Badge>
-											) : (
-												<Badge
-													variant='secondary'
-													className='text-red-500 bg-red-500/10 border-red-500/20 shadow-none font-medium flex w-fit items-center gap-1.5'
-												>
-													<ShieldBan className='h-3.5 w-3.5' /> Bloklangan
-												</Badge>
-											)}
-										</TableCell>
-
-										<TableCell
-											className='text-right'
-											onClick={e => e.stopPropagation()}
-										>
-											<DropdownMenu>
-												<DropdownMenuTrigger asChild>
-													<Button
-														variant='ghost'
-														size='icon'
-														className='h-8 w-8 text-muted-foreground hover:text-foreground'
-													>
-														<MoreHorizontal className='h-4 w-4' />
-													</Button>
-												</DropdownMenuTrigger>
-												<DropdownMenuContent align='end' className='w-48'>
-													<DropdownMenuLabel>Harakatlar</DropdownMenuLabel>
-													<DropdownMenuSeparator />
-													<DropdownMenuItem
-														className='cursor-pointer'
-														onClick={() =>
-															router.push(`/admin/mentors/${mentor.id}/view`)
-														}
-													>
-														<Eye className='h-4 w-4 mr-2 text-muted-foreground' />{' '}
-														Ko'rish
-													</DropdownMenuItem>
-													<DropdownMenuItem
-														className='cursor-pointer'
-														onClick={() =>
-															router.push(`/admin/mentors/${mentor.id}/edit`)
-														}
-													>
-														<Edit className='h-4 w-4 mr-2 text-muted-foreground' />{' '}
-														Tahrirlash
-													</DropdownMenuItem>
-													{mentor.status === 'active' ? (
-														<DropdownMenuItem
-															className='cursor-pointer text-orange-600 focus:text-orange-600'
-															onClick={() =>
-																handleToggleStatus(mentor.id, mentor.status)
-															}
-														>
-															<ShieldBan className='h-4 w-4 mr-2' /> Bloklash
-														</DropdownMenuItem>
-													) : (
-														<DropdownMenuItem
-															className='cursor-pointer text-green-600 focus:text-green-600'
-															onClick={() =>
-																handleToggleStatus(mentor.id, mentor.status)
-															}
-														>
-															<CheckCircle2 className='h-4 w-4 mr-2' /> Blokdan
-															chiqarish
-														</DropdownMenuItem>
-													)}
-													<DropdownMenuSeparator />
-													<DropdownMenuItem
-														className='cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50'
-														onClick={() =>
-															router.push(
-																`/admin/mentors?action=delete&id=${mentor.id}`,
-															)
-														}
-													>
-														<Trash2 className='h-4 w-4 mr-2' /> Mentorlikdan
-														chetlatish
-													</DropdownMenuItem>
-												</DropdownMenuContent>
-											</DropdownMenu>
-										</TableCell>
-									</MotionTableRow>
-								))
-							) : (
-								<TableRow>
-									<TableCell
-										colSpan={8}
-										className='h-32 text-center text-muted-foreground'
-									>
-										Hech narsa topilmadi. Qidiruv so'zini o'zgartirib ko'ring.
-									</TableCell>
-								</TableRow>
-							)}
-						</TableBody>
-					</Table>
-				</div>
-
-				<div className='p-4 border-t flex items-center justify-between text-sm text-muted-foreground bg-muted/20'>
-					<p>
-						Jami {filteredMentors.length} ta natijadan 1-
-						{filteredMentors.length} tasi ko'rsatilmoqda.
-					</p>
-					<div className='flex gap-2'>
-						<Button variant='outline' size='sm' disabled>
-							Oldingi
-						</Button>
-						<Button variant='outline' size='sm' disabled>
-							Keyingi
-						</Button>
+			{/* 📊 Qisqacha statistika (Skelet yuklanayotganda yashiramiz) */}
+			{!isLoading && !isTableEmpty && (
+				<motion.div
+					variants={itemVariants}
+					className='flex flex-col sm:flex-row sm:items-center bg-card p-4 rounded-xl border shadow-sm gap-4 justify-between'
+				>
+					<div className='flex items-center gap-2 w-full'>
+						<Badge
+							variant='secondary'
+							className='px-3 py-1 text-sm font-medium'
+						>
+							{t('common.all') || 'Barchasi'}: {mentors.length}
+						</Badge>
+						<Badge className='bg-green-500/15 text-green-700 dark:text-green-400 hover:bg-green-500/20 border-none px-3 py-1 text-sm font-medium shadow-none'>
+							{t('common.active') || 'Faol'}: {activeCount}
+						</Badge>
 					</div>
-				</div>
+				</motion.div>
+			)}
+
+			{/* 🗂️ JADVAL */}
+			<motion.div variants={itemVariants}>
+				<DataTable
+					columns={columns}
+					data={mentors}
+					isLoading={isLoading}
+					searchPlaceholder={
+						t('mentors.searchPlaceholder') ||
+						"Ism yoki raqam bo'yicha qidirish..."
+					}
+					searchKey={row =>
+						`${row.name} ${row.course} ${row.group} ${row.phoneNumber}`
+					}
+					onRowClick={row => router.push(`/admin/mentors/${row.id}/view`)}
+					emptyProps={{
+						title: t('common.noResults') || 'Natija topilmadi',
+						description:
+							t('mentors.noResults') || "Mentorlar ro'yxati hozircha bo'sh.",
+					}}
+				/>
 			</motion.div>
 
-			{actionType === 'delete' && <DeleteMentorModal />}
+			{/* 🗑️ DELETE MODAL (Optimistik onSuccess yuboriladi) */}
+			{actionType === 'delete' && (
+				<DeleteMentorModal onSuccess={handleDeleteSuccess} />
+			)}
 		</motion.div>
 	)
 }
 
+// Suspense Layout (Next.js App Router qoidasi)
 export default function AdminMentorsPage() {
 	return (
-		<Suspense
-			fallback={
-				<div className='space-y-6 max-w-7xl mx-auto pb-8 p-6'>
-					<div className='flex justify-between'>
-						<div className='space-y-2'>
-							<Skeleton className='h-8 w-48' />
-							<Skeleton className='h-4 w-64' />
-						</div>
-						<Skeleton className='h-10 w-32' />
-					</div>
-					<Skeleton className='h-20 w-full rounded-xl' />
-					<Skeleton className='h-96 w-full rounded-xl' />
-				</div>
-			}
-		>
+		<Suspense fallback={<LoadingSpinner fullScreen />}>
 			<AdminMentorsContent />
 		</Suspense>
 	)

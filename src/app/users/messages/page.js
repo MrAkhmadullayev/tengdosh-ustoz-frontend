@@ -1,13 +1,17 @@
 'use client'
 
+import { useSocket } from '@/components/providers/socket-provider'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import api from '@/lib/api'
+import { useAuth } from '@/lib/auth-context'
+import { useTranslation } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import {
 	AlertTriangle,
@@ -19,14 +23,20 @@ import {
 	User,
 	UserPlus,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { io } from 'socket.io-client'
+import {
+	Suspense,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from 'react'
 
-export default function MessagesPage() {
-	const [userRole, setUserRole] = useState('student')
-	const [userId, setUserId] = useState(null)
+function MessagesContent() {
+	const { user, role: userRole } = useAuth()
+	const { socket, isConnected } = useSocket()
+	const { t } = useTranslation()
 
-	// Dynamic Data
 	const [conversations, setConversations] = useState([])
 	const [systemConversations, setSystemConversations] = useState([])
 	const [activeChatHistory, setActiveChatHistory] = useState([])
@@ -34,15 +44,14 @@ export default function MessagesPage() {
 
 	const [mainTab, setMainTab] = useState('system')
 	const [sysTab, setSysTab] = useState('all')
-	const [contactTab, setContactTab] = useState('mentor')
+	const [contactTab, setContactTab] = useState(
+		userRole === 'mentor' ? 'student' : 'mentor',
+	)
 	const [searchQuery, setSearchQuery] = useState('')
 	const [selectedContact, setSelectedContact] = useState(null)
 	const [replyText, setReplyText] = useState('')
 
-	// Socket
-	const [socket, setSocket] = useState(null)
 	const messagesEndRef = useRef(null)
-
 	const activeChatIdRef = useRef(activeConversationId)
 	const activeContactRef = useRef(selectedContact)
 
@@ -54,96 +63,7 @@ export default function MessagesPage() {
 		activeContactRef.current = selectedContact
 	}, [selectedContact])
 
-	useEffect(() => {
-		const savedRole = sessionStorage.getItem('userRole') || 'student'
-
-		// ID ni xavfsiz olish (ba'zida _id, ba'zida id bo'lishi mumkin)
-		const userStr = localStorage.getItem('user')
-		let savedId = ''
-		if (userStr) {
-			try {
-				const userObj = JSON.parse(userStr)
-				savedId = userObj._id || userObj.id || ''
-			} catch (e) {}
-		}
-
-		setUserRole(savedRole)
-		setUserId(savedId)
-
-		if (savedRole === 'mentor') {
-			setMainTab('system')
-			setContactTab('student')
-		}
-
-		fetchConversations()
-		fetchSystemConversations()
-
-		const socketUrl =
-			process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') ||
-			'http://13.48.57.24:5000'
-		const socketInstance = io(socketUrl, { withCredentials: true })
-		setSocket(socketInstance)
-
-		if (savedId) {
-			socketInstance.emit('join_user_channel', savedId)
-		}
-
-		// Direct Message qabul qilish
-		socketInstance.on('receive_direct_message', populatedMsg => {
-			const currentActiveId = activeChatIdRef.current
-			const currentContact = activeContactRef.current
-			const isMyMsg =
-				populatedMsg.senderId?._id === savedId ||
-				populatedMsg.senderId === savedId
-
-			let shouldAdd = false
-
-			if (currentActiveId === populatedMsg.conversationId) {
-				shouldAdd = true
-			} else if (
-				isMyMsg &&
-				(currentActiveId === true || String(currentActiveId).startsWith('new_'))
-			) {
-				shouldAdd = true
-				setActiveConversationId(populatedMsg.conversationId)
-			} else if (
-				!isMyMsg &&
-				currentContact?.contactTargetId === populatedMsg.senderId?._id
-			) {
-				shouldAdd = true
-				setActiveConversationId(populatedMsg.conversationId)
-			}
-
-			if (shouldAdd) {
-				setActiveChatHistory(prev => {
-					if (prev.some(m => m.id === populatedMsg._id)) return prev
-					return [
-						...prev,
-						{
-							...populatedMsg,
-							id: populatedMsg._id,
-							isMe: isMyMsg,
-							sender: isMyMsg
-								? 'me'
-								: `${populatedMsg.senderId?.firstName || ''} ${populatedMsg.senderId?.lastName || ''}`,
-							time: new Date(populatedMsg.createdAt).toLocaleTimeString([], {
-								hour: '2-digit',
-								minute: '2-digit',
-							}),
-						},
-					]
-				})
-			}
-			fetchConversations()
-			fetchSystemConversations()
-		})
-
-		return () => {
-			if (socketInstance) socketInstance.disconnect()
-		}
-	}, [])
-
-	const fetchConversations = async () => {
+	const fetchConversations = useCallback(async () => {
 		try {
 			const res = await api.get('/messages/conversations')
 			if (res.data.success) {
@@ -153,28 +73,27 @@ export default function MessagesPage() {
 		} catch (error) {
 			console.error('Failed to fetch contact conversations', error)
 		}
-	}
+	}, [])
 
-	const fetchSystemConversations = async () => {
+	const fetchSystemConversations = useCallback(async () => {
 		try {
 			const res = await api.get('/messages/system/all')
 			if (res.data.success) {
 				const mappedSys = res.data.conversations.map(c => {
-					const savedRole = sessionStorage.getItem('userRole') || 'student'
 					return {
 						id: c._id,
 						type: c.type || 'general',
 						sender:
-							savedRole === 'admin'
+							userRole === 'admin'
 								? c.participants.find(p => p.role !== 'admin')?.firstName ||
-									'Foydalanuvchi'
-								: 'Platforma Admini',
+									t('common.user')
+								: t('messages.adminSupport'),
 						role:
-							savedRole === 'admin'
+							userRole === 'admin'
 								? c.participants.find(p => p.role !== 'admin')?.role ||
 									'student'
 								: 'admin',
-						text: c.lastMessage?.text || 'Yangi xat',
+						text: c.lastMessage?.text || t('messages.newXat'),
 						time: c.lastMessage?.createdAt
 							? new Date(c.lastMessage.createdAt).toLocaleTimeString([], {
 									hour: '2-digit',
@@ -189,7 +108,79 @@ export default function MessagesPage() {
 		} catch (error) {
 			console.error('Failed to fetch system conversations', error)
 		}
-	}
+	}, [userRole, t])
+
+	useEffect(() => {
+		fetchConversations()
+		fetchSystemConversations()
+	}, [fetchConversations, fetchSystemConversations])
+
+	useEffect(() => {
+		if (!socket) return
+
+		const handleReceiveMessage = populatedMsg => {
+			const currentActiveId = activeChatIdRef.current
+			const currentContact = activeContactRef.current
+			const myId = user?.id || user?._id
+			const isMyMsg =
+				populatedMsg.senderId?._id === myId || populatedMsg.senderId === myId
+
+			let shouldAdd = false
+
+			if (currentActiveId === populatedMsg.conversationId) {
+				shouldAdd = true
+			} else if (
+				isMyMsg &&
+				(currentActiveId === true ||
+					(typeof currentActiveId === 'string' &&
+						currentActiveId.startsWith('new_')))
+			) {
+				shouldAdd = true
+				setActiveConversationId(populatedMsg.conversationId)
+			} else if (
+				!isMyMsg &&
+				currentContact?.contactTargetId === populatedMsg.senderId?._id
+			) {
+				shouldAdd = true
+				setActiveConversationId(populatedMsg.conversationId)
+			}
+
+			if (shouldAdd) {
+				setActiveChatHistory(prev => {
+					if (prev.some(m => (m.id || m._id) === populatedMsg._id)) return prev
+					return [
+						...prev,
+						{
+							...populatedMsg,
+							id: populatedMsg._id,
+							isMe: isMyMsg,
+							sender: isMyMsg
+								? t('common.me')
+								: `${populatedMsg.senderId?.firstName || ''} ${populatedMsg.senderId?.lastName || ''}`,
+							time: new Date(populatedMsg.createdAt).toLocaleTimeString([], {
+								hour: '2-digit',
+								minute: '2-digit',
+							}),
+						},
+					]
+				})
+			}
+			fetchConversations()
+			fetchSystemConversations()
+		}
+
+		socket.on('receive_direct_message', handleReceiveMessage)
+		return () => {
+			socket.off('receive_direct_message', handleReceiveMessage)
+		}
+	}, [
+		socket,
+		user?.id,
+		user?._id,
+		t,
+		fetchConversations,
+		fetchSystemConversations,
+	])
 
 	const selectSystemMessage = async sysMsg => {
 		setSelectedContact(sysMsg.id)
@@ -236,16 +227,13 @@ export default function MessagesPage() {
 
 	const filteredSystemMessages = useMemo(() => {
 		return systemConversations.filter(msg => {
-			if (userRole === 'mentor' || userRole === 'student') {
-				return (
-					msg.sender?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					msg.text?.toLowerCase().includes(searchQuery.toLowerCase())
-				)
-			}
-			const matchesTab = sysTab === 'all' || msg.type === sysTab
 			const matchesSearch =
 				msg.sender?.toLowerCase().includes(searchQuery.toLowerCase()) ||
 				msg.text?.toLowerCase().includes(searchQuery.toLowerCase())
+
+			if (userRole !== 'admin') return matchesSearch
+
+			const matchesTab = sysTab === 'all' || msg.type === sysTab
 			return matchesTab && matchesSearch
 		})
 	}, [systemConversations, searchQuery, sysTab, userRole])
@@ -261,31 +249,14 @@ export default function MessagesPage() {
 		})
 	}, [conversations, searchQuery, contactTab])
 
-	const selectedSystemMsg = systemConversations.find(
-		m => m.id === selectedContact,
-	)
-	const selectedActiveContact = conversations.find(
-		c => c.id === selectedContact?.id,
-	)
-
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
 	}, [activeChatHistory])
 
-	// --- XABAR YUBORISH (Tuzatilgan qism) ---
-	const handleSendMessage = () => {
-		if (!replyText.trim()) return
-
-		// Kafolatlangan UserId ni topish
-		const currentUserId =
-			userId ||
-			JSON.parse(localStorage.getItem('user'))?._id ||
-			JSON.parse(localStorage.getItem('user'))?.id
-
-		if (!socket || !currentUserId) {
-			console.warn('Socket ulanmagan yoki Foydalanuvchi ID topilmadi!')
-			return
-		}
+	const handleSendMessage = useCallback(() => {
+		if (!replyText.trim() || !socket) return
+		const myId = user?.id || user?._id
+		if (!myId) return
 
 		const newMsgObj = {
 			id: Date.now().toString(),
@@ -298,11 +269,13 @@ export default function MessagesPage() {
 		}
 
 		const isContact = mainTab === 'contacts'
+		const selectedActiveContact = conversations.find(
+			c => c.id === selectedContact?.id,
+		)
 		const targetId = isContact ? selectedActiveContact?.contactTargetId : null
 
-		// Server kutadigan universal payload
 		const payload = {
-			senderId: currentUserId,
+			senderId: myId,
 			conversationId: activeConversationId,
 			text: replyText.trim(),
 			isSystem: !isContact,
@@ -312,13 +285,18 @@ export default function MessagesPage() {
 			payload.targetId = targetId
 		}
 
-		// Emit qilib jo'natamiz
 		socket.emit('send_direct_message', payload)
-
-		// UI da darhol ko'rsatish (Optimistic update)
 		setActiveChatHistory(prev => [...prev, newMsgObj])
 		setReplyText('')
-	}
+	}, [
+		replyText,
+		socket,
+		user,
+		mainTab,
+		selectedContact,
+		activeConversationId,
+		conversations,
+	])
 
 	const handleKeyDown = e => {
 		if (e.key === 'Enter' && !e.shiftKey) {
@@ -343,32 +321,23 @@ export default function MessagesPage() {
 			<MessageSquare className='h-4 w-4 text-green-500' />
 		)
 
-	const getBadge = type =>
-		type === 'complaint'
-			? 'bg-red-500/10 text-red-600'
-			: type === 'connection'
-				? 'bg-blue-500/10 text-blue-600'
-				: 'bg-green-500/10 text-green-600'
-
-	const getLabel = type =>
-		type === 'complaint'
-			? 'Shikoyat'
-			: type === 'connection'
-				? "So'rov"
-				: 'Umumiy'
-
 	const isChatOpen = selectedContact !== null
+	const selectedSystemMsg = systemConversations.find(
+		m => m.id === selectedContact,
+	)
+	const selectedActiveContact = conversations.find(
+		c => c.id === selectedContact?.id,
+	)
 
 	return (
 		<div className='flex flex-col h-[calc(100vh-6rem)] w-full overflow-hidden max-w-7xl mx-auto pb-4'>
-			{/* HEADER SECTION */}
 			<div className='shrink-0 mb-4 flex flex-col md:flex-row md:items-end justify-between gap-4'>
 				<div>
 					<h1 className='text-2xl sm:text-3xl font-bold tracking-tight text-foreground'>
-						Xabarlar
+						{t('sidebar.messages')}
 					</h1>
 					<p className='text-muted-foreground mt-1 text-sm'>
-						Tizim va foydalanuvchilar o'rtasidagi yozishmalar.
+						{t('messages.description')}
 					</p>
 				</div>
 				<Tabs
@@ -378,22 +347,20 @@ export default function MessagesPage() {
 				>
 					<TabsList className='grid w-full grid-cols-2 h-10'>
 						<TabsTrigger value='system'>
-							{userRole === 'mentor' || userRole === 'student'
-								? 'Admin chati'
-								: 'Tizim / Shikoyat'}
+							{userRole === 'admin'
+								? t('messages.systemComplaints')
+								: t('messages.adminChat')}
 						</TabsTrigger>
 						<TabsTrigger value='contacts'>
-							{userRole === 'mentor' ? 'Talabalar' : 'Kontaktlar'}
+							{userRole === 'mentor'
+								? t('sidebar.students')
+								: t('sidebar.mentors')}
 						</TabsTrigger>
 					</TabsList>
 				</Tabs>
 			</div>
 
-			{/* ASOSIY CONTAINER 
-        flex-col md:flex-row aynan ikki tomonga (side-by-side) yoyishni ta'minlaydi.
-      */}
 			<Card className='flex-1 flex flex-col md:flex-row overflow-hidden border-muted shadow-sm relative'>
-				{/* CHAP TOMON: RO'YXAT */}
 				<div
 					className={cn(
 						'w-full md:w-80 lg:w-[350px] border-r flex flex-col shrink-0 bg-card',
@@ -404,7 +371,7 @@ export default function MessagesPage() {
 						<div className='relative'>
 							<Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
 							<Input
-								placeholder='Qidirish...'
+								placeholder={t('common.search')}
 								className='pl-9 bg-muted/50 border-transparent focus-visible:ring-primary rounded-xl h-10'
 								value={searchQuery}
 								onChange={e => setSearchQuery(e.target.value)}
@@ -416,38 +383,38 @@ export default function MessagesPage() {
 								<Tabs value={sysTab} onValueChange={setSysTab}>
 									<TabsList className='grid w-full grid-cols-4 h-9'>
 										<TabsTrigger value='all' className='text-[10px] sm:text-xs'>
-											Barchasi
+											{t('common.all')}
 										</TabsTrigger>
 										<TabsTrigger
 											value='general'
 											className='text-[10px] sm:text-xs'
 										>
-											Umumiy
+											{t('common.general')}
 										</TabsTrigger>
 										<TabsTrigger
 											value='complaint'
 											className='text-[10px] sm:text-xs'
 										>
-											Shikoyat
+											{t('common.complaint')}
 										</TabsTrigger>
 										<TabsTrigger
 											value='connection'
 											className='text-[10px] sm:text-xs'
 										>
-											So'rov
+											{t('common.request')}
 										</TabsTrigger>
 									</TabsList>
 								</Tabs>
 							) : (
 								<div className='h-9 flex flex-col items-start justify-center text-xs font-bold text-muted-foreground uppercase tracking-wider gap-2'>
-									<span>Asosiy Admin Kanalimiz</span>
+									<span>{t('messages.mainAdminChannel')}</span>
 									{filteredSystemMessages.length === 0 && (
 										<Button
 											size='sm'
 											onClick={() => setSelectedContact(true)}
 											className='h-8 rounded-lg'
 										>
-											Adminga yozish
+											{t('messages.writeAdmin')}
 										</Button>
 									)}
 								</div>
@@ -456,10 +423,10 @@ export default function MessagesPage() {
 							<Tabs value={contactTab} onValueChange={setContactTab}>
 								<TabsList className='grid w-full grid-cols-2 h-9'>
 									<TabsTrigger value='mentor' className='text-xs'>
-										Mentorlar
+										{t('sidebar.mentors')}
 									</TabsTrigger>
 									<TabsTrigger value='student' className='text-xs'>
-										Studentlar
+										{t('sidebar.students')}
 									</TabsTrigger>
 								</TabsList>
 							</Tabs>
@@ -518,7 +485,7 @@ export default function MessagesPage() {
 							) : (
 								<div className='flex flex-col items-center justify-center h-full p-6 text-center text-muted-foreground'>
 									<MessageSquare className='h-10 w-10 mb-3 opacity-20' />
-									<p className='text-sm'>Tizim xabarlari topilmadi.</p>
+									<p className='text-sm'>{t('messages.noSystemMessages')}</p>
 								</div>
 							))}
 
@@ -579,13 +546,12 @@ export default function MessagesPage() {
 							) : (
 								<div className='flex flex-col items-center justify-center h-full p-6 text-center text-muted-foreground'>
 									<User className='h-10 w-10 mb-3 opacity-20' />
-									<p className='text-sm'>Kontaktlar mavjud emas.</p>
+									<p className='text-sm'>{t('messages.noContacts')}</p>
 								</div>
 							))}
 					</div>
 				</div>
 
-				{/* O'NG TOMON: CHAT XONASI */}
 				<div
 					className={cn(
 						'flex-1 flex flex-col h-full bg-background min-w-0',
@@ -594,7 +560,6 @@ export default function MessagesPage() {
 				>
 					{selectedContact ? (
 						<>
-							{/* Chat Header */}
 							<div className='h-16 px-4 md:px-6 border-b bg-card flex items-center gap-3 shadow-sm shrink-0 z-10'>
 								<Button
 									variant='ghost'
@@ -616,18 +581,17 @@ export default function MessagesPage() {
 										{mainTab === 'system'
 											? selectedSystemMsg
 												? selectedSystemMsg.sender
-												: 'Admin Chati'
+												: t('messages.adminChat')
 											: selectedActiveContact?.name}
 									</h3>
 									<p className='text-[11px] font-medium text-muted-foreground capitalize truncate'>
 										{mainTab === 'system'
 											? selectedSystemMsg?.role || 'admin'
-											: 'Foydalanuvchi'}
+											: t('common.user')}
 									</p>
 								</div>
 							</div>
 
-							{/* Chat Messages */}
 							<div className='flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 bg-muted/10 custom-scrollbar relative'>
 								<div className='max-w-3xl mx-auto space-y-4'>
 									<div className='text-center sticky top-0 py-2 z-10'>
@@ -635,7 +599,7 @@ export default function MessagesPage() {
 											variant='outline'
 											className='text-[10px] font-bold bg-background/80 backdrop-blur-sm uppercase tracking-wider text-muted-foreground shadow-sm'
 										>
-											Suhbat tarixi
+											{t('messages.chatHistory')}
 										</Badge>
 									</div>
 
@@ -678,7 +642,6 @@ export default function MessagesPage() {
 								</div>
 							</div>
 
-							{/* Chat Input */}
 							<div className='p-3 sm:p-4 border-t bg-card shrink-0 z-10'>
 								<div className='max-w-3xl mx-auto flex items-end gap-2 relative'>
 									<Button
@@ -693,14 +656,17 @@ export default function MessagesPage() {
 										value={replyText}
 										onChange={e => setReplyText(e.target.value)}
 										onKeyDown={handleKeyDown}
-										placeholder='Xabar yozing...'
+										placeholder={t('messages.writeMessage')}
 										className='min-h-[50px] max-h-[150px] resize-none text-[15px] bg-muted/50 border-transparent focus-visible:ring-primary rounded-xl py-3.5 custom-scrollbar'
 									/>
 									<Button
 										size='icon'
 										onClick={handleSendMessage}
-										disabled={!replyText.trim()}
-										className='h-[50px] w-[50px] rounded-xl shrink-0 transition-all shadow-sm'
+										disabled={!replyText.trim() || !isConnected}
+										className={cn(
+											'h-[50px] w-[50px] rounded-xl shrink-0 transition-all shadow-sm',
+											!isConnected && 'opacity-50 grayscale',
+										)}
 									>
 										<Send className='h-5 w-5 ml-0.5' />
 									</Button>
@@ -713,15 +679,23 @@ export default function MessagesPage() {
 								<MessageSquare className='h-10 w-10 opacity-30 text-primary' />
 							</div>
 							<h3 className='text-xl font-bold text-foreground mb-1'>
-								Xabarlar paneli
+								{t('messages.panelTitle')}
 							</h3>
 							<p className='text-sm max-w-[250px] text-center font-medium'>
-								Suhbatni boshlash uchun chap tomondan xatni tanlang.
+								{t('messages.panelDescription')}
 							</p>
 						</div>
 					)}
 				</div>
 			</Card>
 		</div>
+	)
+}
+
+export default function MessagesPage() {
+	return (
+		<Suspense fallback={<LoadingSpinner fullScreen />}>
+			<MessagesContent />
+		</Suspense>
 	)
 }

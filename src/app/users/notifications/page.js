@@ -33,7 +33,7 @@ const INITIAL_NOTIFICATIONS = [
 		href: '/admin/lessons',
 		unread: true,
 		icon: <Video className='w-5 h-5 text-blue-500' />,
-		bgColor: 'bg-blue-50',
+		bgColor: 'bg-blue-50 dark:bg-blue-500/10',
 	},
 	{
 		id: 2,
@@ -46,7 +46,7 @@ const INITIAL_NOTIFICATIONS = [
 		href: '/users/messages',
 		unread: true,
 		icon: <MessageSquare className='w-5 h-5 text-green-500' />,
-		bgColor: 'bg-green-50',
+		bgColor: 'bg-green-50 dark:bg-green-500/10',
 	},
 	{
 		id: 3,
@@ -59,7 +59,7 @@ const INITIAL_NOTIFICATIONS = [
 		href: '/admin/dashboard',
 		unread: false,
 		icon: <Wallet className='w-5 h-5 text-orange-500' />,
-		bgColor: 'bg-orange-50',
+		bgColor: 'bg-orange-50 dark:bg-orange-500/10',
 	},
 	{
 		id: 4,
@@ -72,7 +72,7 @@ const INITIAL_NOTIFICATIONS = [
 		href: '/users/settings',
 		unread: false,
 		icon: <Bell className='w-5 h-5 text-purple-500' />,
-		bgColor: 'bg-purple-50',
+		bgColor: 'bg-purple-50 dark:bg-purple-500/10',
 	},
 ]
 
@@ -172,7 +172,7 @@ export default function NotificationsPage() {
 					>
 						O'qilmagan
 						{unreadCount > 0 && (
-							<Badge className='h-5 w-5 p-0 flex items-center justify-center rounded-full bg-white text-primary'>
+							<Badge className='h-5 w-5 p-0 flex items-center justify-center rounded-full bg-background text-primary hover:bg-background'>
 								{unreadCount}
 							</Badge>
 						)}
@@ -194,7 +194,7 @@ export default function NotificationsPage() {
 					filteredNotifications.map(notif => (
 						<Card
 							key={notif.id}
-							className={`group relative overflow-hidden transition-all duration-300 hover:shadow-md border-muted/50 rounded-2xl ${notif.unread ? 'ring-1 ring-primary/20 bg-primary/opacity-5' : 'bg-card'}`}
+							className={`group relative overflow-hidden transition-all duration-300 hover:shadow-md border-muted/50 rounded-2xl ${notif.unread ? 'ring-1 ring-primary/20 bg-primary/5' : 'bg-card'}`}
 						>
 							<CardContent
 								className='p-6 cursor-pointer'
@@ -236,7 +236,7 @@ export default function NotificationsPage() {
 										<Button
 											variant='ghost'
 											size='icon'
-											className='h-9 w-9 text-red-500 hover:bg-red-50 hover:text-red-600 rounded-full'
+											className='h-9 w-9 text-destructive hover:bg-destructive/10 hover:text-destructive rounded-full'
 											onClick={e => {
 												e.stopPropagation()
 												deleteNotification(notif.id)

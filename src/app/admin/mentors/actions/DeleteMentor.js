@@ -10,40 +10,56 @@ import {
 	DialogTitle,
 } from '@/components/ui/dialog'
 import api from '@/lib/api'
-import { AlertTriangle, Loader2 } from 'lucide-react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useTranslation } from '@/lib/i18n'
+import { getErrorMessage } from '@/lib/utils'
+import { AlertTriangle, Loader2, Trash2 } from 'lucide-react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
+import { toast } from 'sonner'
 
-export default function DeleteMentorModal() {
+export default function DeleteMentorModal({ onSuccess }) {
 	const router = useRouter()
+	const pathname = usePathname()
 	const searchParams = useSearchParams()
 	const actionId = searchParams.get('id')
 
+	const { t } = useTranslation()
 	const [isDeleting, setIsDeleting] = useState(false)
-	const [errorMsg, setErrorMsg] = useState('')
 
+	// Modalni yopish (URL dagi ?action=delete parametrlarni tozalaydi)
 	const closeModal = () => {
-		// Tarixni to'ldirib yubormaslik uchun replace ishlatamiz
-		router.replace('/admin/mentors')
-		router.refresh() // O'chirilgandan so'ng ma'lumotlarni yangilash
+		router.replace(pathname, { scroll: false })
 	}
 
+	// O'chirish logikasi
 	const handleDelete = async () => {
 		if (!actionId) return
 
 		setIsDeleting(true)
-		setErrorMsg('')
 
 		try {
 			const res = await api.delete(`/admin/mentors/${actionId}`)
+
 			if (res?.data?.success) {
+				toast.success(
+					t('mentors.deleteSuccess') ||
+						'Mentor muvaffaqiyatli tizimdan chetlatildi',
+				)
+
+				// 🚀 O'ta muhim qism: Asosiy sahifaga o'chgan ID ni yuboramiz.
+				// U sahifani refresh qilmasdan, aynan shu qatorni jadvaldan qirqib oladi!
+				if (onSuccess) {
+					onSuccess(actionId)
+				}
+
 				closeModal()
 			}
 		} catch (error) {
-			console.error(error)
-			setErrorMsg(
-				error.response?.data?.message ||
-					"O'chirishda xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.",
+			toast.error(
+				getErrorMessage(
+					error,
+					t('errors.deleteFailed') || "O'chirishda xatolik yuz berdi.",
+				),
 			)
 		} finally {
 			setIsDeleting(false)
@@ -51,29 +67,22 @@ export default function DeleteMentorModal() {
 	}
 
 	return (
-		<Dialog open={true} onOpenChange={closeModal}>
-			<DialogContent className='sm:max-w-md border-destructive/20'>
-				<DialogHeader className='flex flex-col gap-2'>
+		<Dialog open={true} onOpenChange={isOpen => !isOpen && closeModal()}>
+			<DialogContent className='sm:max-w-md border-destructive/20 shadow-lg shadow-destructive/10'>
+				<DialogHeader className='flex flex-col gap-3'>
 					<div className='flex items-center gap-3'>
 						<div className='bg-destructive/10 p-3 rounded-full shrink-0 flex items-center justify-center'>
 							<AlertTriangle className='h-6 w-6 text-destructive' />
 						</div>
 						<DialogTitle className='text-destructive text-xl font-bold'>
-							Mentorlikdan chetlatish
+							{t('mentors.deleteTitle') || 'Mentorlikdan chetlatish'}
 						</DialogTitle>
 					</div>
-					<DialogDescription className='mt-2 text-base leading-relaxed text-left'>
-						Siz rostdan ham ushbu mentorni tizimdan chetlatmoqchimisiz? Bu
-						harakatni orqaga qaytarib bo'lmaydi va mentorning barcha
-						faoliyatlari to'xtatiladi.
+					<DialogDescription className='text-base leading-relaxed text-left text-muted-foreground mt-2'>
+						{t('mentors.deleteConfirm') ||
+							"Siz rostdan ham ushbu mentorni tizimdan chetlatmoqchimisiz? Bu harakatni orqaga qaytarib bo'lmaydi va mentorning barcha faoliyatlari to'xtatiladi."}
 					</DialogDescription>
 				</DialogHeader>
-
-				{errorMsg && (
-					<div className='bg-destructive/10 text-destructive px-4 py-3 rounded-lg text-sm font-medium border border-destructive/20'>
-						{errorMsg}
-					</div>
-				)}
 
 				<DialogFooter className='mt-6 flex flex-col-reverse sm:flex-row gap-2 sm:gap-3'>
 					<Button
@@ -82,7 +91,7 @@ export default function DeleteMentorModal() {
 						className='w-full sm:w-auto font-medium'
 						disabled={isDeleting}
 					>
-						Bekor qilish
+						{t('common.cancel') || 'Bekor qilish'}
 					</Button>
 					<Button
 						variant='destructive'
@@ -92,10 +101,14 @@ export default function DeleteMentorModal() {
 					>
 						{isDeleting ? (
 							<>
-								<Loader2 className='h-4 w-4 animate-spin' /> O'chirilmoqda...
+								<Loader2 className='h-4 w-4 animate-spin' />
+								{t('common.deleting') || "O'chirilmoqda..."}
 							</>
 						) : (
-							"O'chirishni tasdiqlash"
+							<>
+								<Trash2 className='h-4 w-4' />
+								{t('common.confirmDelete') || "O'chirishni tasdiqlash"}
+							</>
 						)}
 					</Button>
 				</DialogFooter>

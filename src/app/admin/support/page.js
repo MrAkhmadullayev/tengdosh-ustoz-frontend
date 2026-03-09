@@ -22,6 +22,9 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import api from '@/lib/api'
+import { useTranslation } from '@/lib/i18n'
+// 🔥 Markaziy utilitalar chaqirildi
+import { cn, formatPhone, formatUzDate, getErrorMessage } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
 	Bot,
@@ -39,80 +42,51 @@ import {
 	Trash2,
 	User,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner' // 🔥 Xabarnomalar uchun
 
-const containerVariants = {
-	hidden: { opacity: 0 },
-	show: {
-		opacity: 1,
-		transition: { staggerChildren: 0.08 },
-	},
-}
-
-const itemVariants = {
-	hidden: { opacity: 0, y: 20 },
-	show: {
-		opacity: 1,
-		y: 0,
-		transition: { type: 'spring', stiffness: 300, damping: 24 },
-	},
-}
-
-const STATUS_MAP = {
-	new: {
-		label: 'Yangi',
-		variant: 'destructive',
-		icon: <MessageSquare className='h-3.5 w-3.5' />,
-	},
-	read: {
-		label: "O'qildi",
-		variant: 'secondary',
-		icon: <Eye className='h-3.5 w-3.5' />,
-	},
-	answered: {
-		label: 'Javob berildi',
-		variant: 'default',
-		icon: <CheckCircle className='h-3.5 w-3.5' />,
-	},
-}
-
-const MONTHS = [
-	'Yan',
-	'Fev',
-	'Mar',
-	'Apr',
-	'May',
-	'Iyun',
-	'Iyul',
-	'Avg',
-	'Sen',
-	'Okt',
-	'Noy',
-	'Dek',
-]
-
+// ==========================================
+// 🚀 ASOSIY KOMPONENT
+// ==========================================
 export default function AdminSupportPage() {
+	const { t } = useTranslation()
 	const [messages, setMessages] = useState([])
 	const [loading, setLoading] = useState(true)
 	const [statusFilter, setStatusFilter] = useState('all')
 
-	// Delete modal
+	// Modal holatlari
 	const [showDeleteModal, setShowDeleteModal] = useState(false)
 	const [deleteTarget, setDeleteTarget] = useState(null)
 	const [deleteLoading, setDeleteLoading] = useState(false)
 
-	// Detail modal
 	const [selectedMessage, setSelectedMessage] = useState(null)
-
-	// Reply
 	const [replyText, setReplyText] = useState('')
 	const [replyLoading, setReplyLoading] = useState(false)
 
-	useEffect(() => {
-		fetchMessages()
-	}, [])
+	// Status sozlamalari
+	const statusMap = useMemo(
+		() => ({
+			new: {
+				label: t('dashboard.newStatus') || 'Yangi',
+				variant: 'destructive',
+				icon: <MessageSquare className='h-3.5 w-3.5' />,
+			},
+			read: {
+				label: t('dashboard.readStatus') || "O'qilgan",
+				variant: 'secondary',
+				icon: <Eye className='h-3.5 w-3.5' />,
+			},
+			answered: {
+				label: t('dashboard.answeredStatus') || 'Javob berilgan',
+				variant: 'default',
+				icon: <CheckCircle className='h-3.5 w-3.5' />,
+			},
+		}),
+		[t],
+	)
 
-	const fetchMessages = async () => {
+	// 1. Xabarlarni yuklash
+	const fetchMessages = useCallback(async () => {
 		try {
 			setLoading(true)
 			const res = await api.get('/admin/support-messages')
@@ -120,30 +94,46 @@ export default function AdminSupportPage() {
 				setMessages(res.data.messages)
 			}
 		} catch (error) {
-			console.error(error)
+			toast.error(
+				getErrorMessage(
+					error,
+					t('errors.fetchFailed') || 'Xabarlarni yuklashda xatolik',
+				),
+			)
 		} finally {
 			setLoading(false)
 		}
-	}
+	}, [t])
 
-	const handleStatusChange = async (id, newStatus) => {
-		try {
-			const res = await api.patch(`/admin/support-messages/${id}/status`, {
-				status: newStatus,
-			})
-			if (res?.data?.success) {
-				setMessages(prev =>
-					prev.map(m => (m._id === id ? { ...m, status: newStatus } : m)),
-				)
-				if (selectedMessage?._id === id) {
-					setSelectedMessage(prev => ({ ...prev, status: newStatus }))
+	useEffect(() => {
+		fetchMessages()
+	}, [fetchMessages])
+
+	// 2. Statusni o'zgartirish
+	const handleStatusChange = useCallback(
+		async (id, newStatus, showToast = true) => {
+			try {
+				const res = await api.patch(`/admin/support-messages/${id}/status`, {
+					status: newStatus,
+				})
+				if (res?.data?.success) {
+					setMessages(prev =>
+						prev.map(m => (m._id === id ? { ...m, status: newStatus } : m)),
+					)
+					if (selectedMessage?._id === id) {
+						setSelectedMessage(prev => ({ ...prev, status: newStatus }))
+					}
+					if (showToast)
+						toast.success(t('common.updateSuccess') || 'Status yangilandi')
 				}
+			} catch (error) {
+				if (showToast) toast.error(getErrorMessage(error))
 			}
-		} catch (error) {
-			console.error(error)
-		}
-	}
+		},
+		[selectedMessage, t],
+	)
 
+	// 3. Xabarni o'chirish
 	const handleDelete = async () => {
 		if (!deleteTarget) return
 		setDeleteLoading(true)
@@ -156,16 +146,20 @@ export default function AdminSupportPage() {
 				if (selectedMessage?._id === deleteTarget._id) {
 					setSelectedMessage(null)
 				}
+				toast.success(
+					t('dashboard.deleteSuccess') || "Muvaffaqiyatli o'chirildi",
+				)
 				setShowDeleteModal(false)
 			}
 		} catch (error) {
-			console.error(error)
+			toast.error(getErrorMessage(error, t('errors.deleteFailed')))
 		} finally {
 			setDeleteLoading(false)
 			setDeleteTarget(null)
 		}
 	}
 
+	// 4. Javob yuborish
 	const handleReply = async () => {
 		if (!replyText.trim() || !selectedMessage) return
 		setReplyLoading(true)
@@ -181,69 +175,70 @@ export default function AdminSupportPage() {
 				)
 				setSelectedMessage(updated)
 				setReplyText('')
+				toast.success(t('dashboard.replySuccess') || 'Javob yuborildi')
 			}
 		} catch (error) {
-			console.error(error)
+			toast.error(getErrorMessage(error, t('errors.updateFailed')))
 		} finally {
 			setReplyLoading(false)
 		}
 	}
 
-	const openMessage = msg => {
-		setSelectedMessage(msg)
-		setReplyText('')
-		if (msg.status === 'new') {
-			handleStatusChange(msg._id, 'read')
-		}
-	}
+	// 5. Xabarni ochish (Yangi bo'lsa o'qilganda o'tkazish)
+	const openMessage = useCallback(
+		msg => {
+			setSelectedMessage(msg)
+			setReplyText('')
+			if (msg.status === 'new') {
+				handleStatusChange(msg._id, 'read', false) // Toast ko'rsatmasdan jim statusni o'zgartiramiz
+			}
+		},
+		[handleStatusChange],
+	)
 
-	const formatDate = dateStr => {
-		if (!dateStr) return '-'
+	const getTime = dateStr => {
+		if (!dateStr) return ''
 		const d = new Date(dateStr)
-		if (isNaN(d.getTime())) return dateStr
-		return `${d.getDate()}-${MONTHS[d.getMonth()]}, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+		if (isNaN(d.getTime())) return ''
+		return d.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })
 	}
 
-	const filteredMessages =
-		statusFilter === 'all'
-			? messages
-			: messages.filter(m => m.status === statusFilter)
+	const filteredMessages = useMemo(
+		() =>
+			statusFilter === 'all'
+				? messages
+				: messages.filter(m => m.status === statusFilter),
+		[messages, statusFilter],
+	)
 
-	const newCount = messages.filter(m => m.status === 'new').length
+	const newCount = useMemo(
+		() => messages.filter(m => m.status === 'new').length,
+		[messages],
+	)
 
+	// UI: Qism
 	return (
-		<motion.div
-			variants={containerVariants}
-			initial='hidden'
-			animate='show'
-			className='space-y-6 max-w-6xl mx-auto pb-12 pt-4 sm:pt-6'
-		>
-			{/* DELETE MODAL */}
+		<div className='space-y-6 max-w-6xl mx-auto pb-12 pt-6 px-4 sm:px-6 w-full'>
+			{/* 🛡️ O'CHIRISH MODALI */}
 			<Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
-				<DialogContent className='sm:max-w-md border-destructive/20'>
-					<DialogHeader className='text-center space-y-4'>
-						<div className='mx-auto bg-destructive/10 w-16 h-16 rounded-full flex items-center justify-center'>
-							<Trash2 className='h-8 w-8 text-destructive' />
-						</div>
-						<DialogTitle className='text-xl font-bold'>
-							Xabarni o'chirish
+				<DialogContent className='sm:max-w-md'>
+					<DialogHeader>
+						<DialogTitle>
+							{t('dashboard.deleteInquiry') || "Xabarni o'chirish"}
 						</DialogTitle>
-						<DialogDescription className='text-base'>
-							<strong>"{deleteTarget?.subject}"</strong> mavzusidagi murojaatni
-							butunlay o'chirib yubormoqchimisiz?
+						<DialogDescription>
+							{t('dashboard.deleteInquiryDesc', {
+								subject: deleteTarget?.subject,
+							}) ||
+								`Haqiqatan ham "${deleteTarget?.subject}" mavzusidagi xabarni o'chirmoqchimisiz?`}
 						</DialogDescription>
 					</DialogHeader>
-					<DialogFooter className='flex flex-col sm:flex-row gap-3 pt-4'>
-						<Button
-							variant='outline'
-							className='flex-1 h-11'
-							onClick={() => setShowDeleteModal(false)}
-						>
-							Bekor qilish
+					<DialogFooter className='flex flex-col sm:flex-row gap-2 mt-4'>
+						<Button variant='outline' onClick={() => setShowDeleteModal(false)}>
+							{t('common.cancel') || 'Bekor qilish'}
 						</Button>
 						<Button
 							variant='destructive'
-							className='flex-1 h-11'
 							onClick={handleDelete}
 							disabled={deleteLoading}
 						>
@@ -252,101 +247,114 @@ export default function AdminSupportPage() {
 							) : (
 								<Trash2 className='h-4 w-4 mr-2' />
 							)}
-							O'chirish
+							{t('common.delete') || "O'chirish"}
 						</Button>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
 
-			{/* DETAIL + REPLY MODAL */}
+			{/* 👁️ XABARNI KO'RISH / JAVOB BERISH MODALI */}
 			<Dialog
 				open={!!selectedMessage}
 				onOpenChange={o => !o && setSelectedMessage(null)}
 			>
-				<DialogContent className='sm:max-w-lg max-h-[90vh] overflow-y-auto'>
+				<DialogContent className='sm:max-w-lg max-h-[90vh] overflow-y-auto border-border'>
 					{selectedMessage && (
-						<div className='space-y-5'>
+						<div className='space-y-6'>
 							<DialogHeader>
-								<div className='flex items-center gap-3 mb-2 flex-wrap'>
+								<div className='flex items-center gap-3 mb-3 flex-wrap'>
 									<Badge
-										variant={STATUS_MAP[selectedMessage.status]?.variant}
-										className='gap-1.5'
+										variant={statusMap[selectedMessage.status]?.variant}
+										className='gap-1.5 shadow-none'
 									>
-										{STATUS_MAP[selectedMessage.status]?.icon}
-										{STATUS_MAP[selectedMessage.status]?.label}
+										{statusMap[selectedMessage.status]?.icon}
+										{statusMap[selectedMessage.status]?.label}
 									</Badge>
-									<span className='text-xs text-muted-foreground flex items-center gap-1.5'>
+									<span className='text-xs text-muted-foreground flex items-center gap-1.5 font-medium'>
 										<Clock className='h-3.5 w-3.5' />
-										{formatDate(selectedMessage.createdAt)}
+										{formatUzDate(selectedMessage.createdAt)}{' '}
+										{getTime(selectedMessage.createdAt)}
 									</span>
 								</div>
 								<DialogTitle className='text-xl font-bold leading-tight'>
 									{selectedMessage.subject}
 								</DialogTitle>
-								<div className='flex flex-col gap-1.5 pt-3'>
+								<div className='flex flex-col gap-2 pt-3'>
 									<span className='flex items-center gap-2.5 text-sm font-medium'>
-										<User className='h-4 w-4 text-primary' />{' '}
+										<User className='h-4 w-4 text-muted-foreground' />{' '}
 										{selectedMessage.name}
 									</span>
-									<span className='flex items-center gap-2.5 text-sm font-medium'>
-										<Phone className='h-4 w-4 text-primary' />{' '}
-										{selectedMessage.phone}
-									</span>
+									<a
+										href={`tel:${selectedMessage.phone.replace(/\D/g, '')}`}
+										className='flex items-center gap-2.5 text-sm font-medium text-primary hover:underline w-fit'
+									>
+										<Phone className='h-4 w-4' />{' '}
+										{formatPhone(selectedMessage.phone)}
+									</a>
 								</div>
 							</DialogHeader>
 
 							<Separator />
 
 							<div className='space-y-2'>
-								<p className='text-xs font-bold text-muted-foreground uppercase tracking-widest'>
-									Murojaat matni
+								<p className='text-[10px] font-bold text-muted-foreground uppercase tracking-widest'>
+									{t('dashboard.inquiryText') || 'Xabar matni'}
 								</p>
-								<div className='bg-muted/50 p-4 rounded-xl text-sm leading-relaxed border italic'>
+								<div className='bg-muted/50 p-4 rounded-lg text-sm leading-relaxed border text-foreground'>
 									"{selectedMessage.message}"
 								</div>
 							</div>
 
 							{selectedMessage.adminReply && (
 								<div className='space-y-2 border-l-4 border-green-500 pl-4 py-1'>
-									<p className='text-xs font-bold text-green-600 uppercase tracking-widest flex items-center gap-1.5'>
-										<CheckCircle className='h-3.5 w-3.5' /> Admin Javobi (
-										{formatDate(selectedMessage.repliedAt)})
+									<p className='text-[10px] font-bold text-green-600 uppercase tracking-widest flex items-center gap-1.5'>
+										<CheckCircle className='h-3.5 w-3.5' />{' '}
+										{t('dashboard.adminReplyLabel') || 'Admin javobi'}
 									</p>
 									<div className='text-sm leading-relaxed text-foreground whitespace-pre-wrap font-medium'>
 										{selectedMessage.adminReply}
 									</div>
 									<p className='text-[10px] text-muted-foreground flex items-center gap-1 mt-1'>
-										<Bot className='h-3 w-3' /> Telegram bot orqali yuborilgan
+										<Bot className='h-3 w-3' />{' '}
+										{formatUzDate(selectedMessage.repliedAt)}{' '}
+										{getTime(selectedMessage.repliedAt)}
 									</p>
 								</div>
 							)}
 
 							<Separator />
 
+							{/* JAVOB YOZISH QISMI */}
 							<div className='space-y-3'>
-								<Label className='font-bold text-sm'>Javob yozish</Label>
+								<Label className='font-bold text-sm'>
+									{t('dashboard.writeReply') || 'Javob yozish'}
+								</Label>
 								<Textarea
-									placeholder='Foydalanuvchiga yuboriladigan matn...'
-									className='min-h-[120px] resize-none focus-visible:ring-primary/20'
+									placeholder={
+										t('dashboard.replyPlaceholder') ||
+										'Foydalanuvchiga javob yozing...'
+									}
+									className='min-h-[100px] resize-y'
 									value={replyText}
 									onChange={e => setReplyText(e.target.value)}
 								/>
-								<div className='flex flex-col sm:flex-row items-center justify-between gap-4'>
+								<div className='flex flex-col sm:flex-row items-center justify-between gap-4 pt-2'>
 									<p className='text-[11px] text-muted-foreground flex items-center gap-1.5'>
 										<Bot className='h-3.5 w-3.5 text-blue-500' />
-										Javob foydalanuvchiga bot orqali boradi
+										{t('dashboard.replyInfo') ||
+											'Xabar foydalanuvchiga Telegram bot orqali boradi.'}
 									</p>
 									<Button
 										onClick={handleReply}
 										disabled={!replyText.trim() || replyLoading}
-										className='w-full sm:w-auto gap-2 shadow-sm'
+										className='w-full sm:w-auto gap-2'
 									>
 										{replyLoading ? (
 											<Loader2 className='h-4 w-4 animate-spin' />
 										) : (
 											<Send className='h-4 w-4' />
 										)}
-										Javobni yuborish
+										{t('dashboard.sendReply') || 'Yuborish'}
 									</Button>
 								</div>
 							</div>
@@ -355,24 +363,24 @@ export default function AdminSupportPage() {
 				</DialogContent>
 			</Dialog>
 
-			{/* PAGE HEADER */}
-			<motion.div
-				variants={itemVariants}
-				className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5 border-b pb-6'
-			>
+			{/* 🏷️ PAGE HEADER & FILTER */}
+			<div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b pb-6'>
 				<div>
-					<h1 className='text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-3'>
-						<Headphones className='h-8 w-8 text-primary' />
-						Support Markazi
+					<h1 className='text-2xl font-bold tracking-tight flex items-center gap-3'>
+						<Headphones className='h-6 w-6 text-primary' />
+						{t('dashboard.supportCenter') || "Qo'llab-quvvatlash"}
 						{newCount > 0 && (
-							<Badge variant='destructive' className='animate-pulse'>
-								{newCount} ta yangi
+							<Badge
+								variant='destructive'
+								className='animate-pulse shadow-none text-[10px] px-2 py-0.5'
+							>
+								{newCount} yangi
 							</Badge>
 						)}
 					</h1>
-					<p className='text-muted-foreground mt-1.5 text-sm sm:text-base'>
-						Foydalanuvchilar murojaatlarini boshqarish va Telegram bot orqali
-						javob qaytarish.
+					<p className='text-muted-foreground mt-1 text-sm'>
+						{t('dashboard.supportCenterDesc') ||
+							'Foydalanuvchilardan kelgan xabar va murojaatlar.'}
 					</p>
 				</div>
 
@@ -380,88 +388,108 @@ export default function AdminSupportPage() {
 					<DropdownMenuTrigger asChild>
 						<Button
 							variant='outline'
-							className='gap-2 h-11 w-full sm:w-auto shadow-sm'
+							className='gap-2 w-full sm:w-auto shadow-sm'
 						>
-							<span className='font-semibold'>
+							<span className='font-medium'>
 								{statusFilter === 'all'
-									? 'Barcha murojaatlar'
-									: STATUS_MAP[statusFilter]?.label}
+									? t('dashboard.allInquiries') || 'Barcha murojaatlar'
+									: statusMap[statusFilter]?.label}
 							</span>
 							<ChevronDown className='h-4 w-4 opacity-50' />
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align='end' className='w-56'>
 						<DropdownMenuItem onClick={() => setStatusFilter('all')}>
-							Barchasi ({messages.length})
+							{t('common.all') || 'Barchasi'} ({messages.length})
 						</DropdownMenuItem>
 						<DropdownMenuItem
 							onClick={() => setStatusFilter('new')}
-							className='text-destructive font-medium'
+							className='text-destructive focus:text-destructive'
 						>
-							🔴 Yangi ({messages.filter(m => m.status === 'new').length})
+							<MessageSquare className='h-4 w-4 mr-2' />{' '}
+							{t('dashboard.onlyNew') || 'Faqat yangilar'} (
+							{messages.filter(m => m.status === 'new').length})
 						</DropdownMenuItem>
 						<DropdownMenuItem onClick={() => setStatusFilter('read')}>
-							👁️ O'qilganlar ({messages.filter(m => m.status === 'read').length}
-							)
+							<Eye className='h-4 w-4 mr-2' />{' '}
+							{t('dashboard.onlyRead') || "O'qilganlar"} (
+							{messages.filter(m => m.status === 'read').length})
 						</DropdownMenuItem>
 						<DropdownMenuItem
 							onClick={() => setStatusFilter('answered')}
-							className='text-green-600 font-medium'
+							className='text-green-600 focus:text-green-600'
 						>
-							✅ Javob berilganlar (
+							<CheckCircle className='h-4 w-4 mr-2' />{' '}
+							{t('dashboard.onlyAnswered') || 'Javob berilganlar'} (
 							{messages.filter(m => m.status === 'answered').length})
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
-			</motion.div>
+			</div>
 
-			{/* MESSAGES LIST */}
+			{/* 🗂️ MESSAGE LIST */}
 			{loading ? (
-				<div className='space-y-4'>
+				<div className='space-y-4 pt-4'>
 					{[1, 2, 3, 4].map(i => (
-						<Skeleton key={i} className='h-32 w-full rounded-2xl' />
+						<Skeleton key={i} className='h-28 w-full rounded-xl' />
 					))}
 				</div>
 			) : filteredMessages.length === 0 ? (
-				<motion.div
-					initial={{ opacity: 0 }}
-					animate={{ opacity: 1 }}
-					className='flex flex-col items-center justify-center py-24 text-center border-2 border-dashed rounded-2xl bg-muted/5'
-				>
-					<Headphones className='h-16 w-16 text-muted-foreground mb-4 opacity-20' />
-					<h3 className='text-xl font-bold'>Murojaatlar topilmadi</h3>
-					<p className='text-muted-foreground max-w-sm mx-auto mt-2'>
-						Ushbu filter bo'yicha hozircha hech qanday xabar mavjud emas.
+				<div className='flex flex-col items-center justify-center py-24 text-center border border-dashed rounded-xl bg-muted/10 mt-6'>
+					<Headphones className='h-12 w-12 text-muted-foreground mb-4 opacity-20' />
+					<h3 className='text-lg font-bold'>
+						{t('dashboard.noSupportMsgs') || 'Murojaatlar topilmadi'}
+					</h3>
+					<p className='text-muted-foreground text-sm mt-1'>
+						{t('dashboard.noSupportMsgsDesc') ||
+							"Tanlangan filter bo'yicha hech qanday xabar mavjud emas."}
 					</p>
-				</motion.div>
+				</div>
 			) : (
-				<motion.div variants={containerVariants} className='space-y-4'>
+				<div className='grid grid-cols-1 gap-4 pt-2'>
 					<AnimatePresence mode='popLayout'>
 						{filteredMessages.map(msg => (
-							<motion.div key={msg._id} variants={itemVariants} layout>
+							<motion.div
+								key={msg._id}
+								layout
+								initial={{ opacity: 0, y: 10 }}
+								animate={{ opacity: 1, y: 0 }}
+								exit={{ opacity: 0, scale: 0.95 }}
+								transition={{ duration: 0.2 }}
+							>
 								<Card
-									className={`group cursor-pointer transition-all border hover:border-primary/40 hover:shadow-md ${msg.status === 'new' ? 'border-l-4 border-l-destructive bg-destructive/[0.01]' : ''}`}
+									className={cn(
+										'group cursor-pointer transition-colors hover:bg-muted/50 overflow-hidden',
+										msg.status === 'new'
+											? 'border-l-4 border-l-destructive bg-card'
+											: 'bg-card',
+									)}
 									onClick={() => openMessage(msg)}
 								>
-									<CardContent className='p-5'>
+									<CardContent className='p-4 sm:p-5'>
 										<div className='flex items-start justify-between gap-4'>
 											<div className='flex-1 min-w-0'>
 												<div className='flex items-center gap-3 mb-2 flex-wrap'>
 													<h3
-														className={`font-bold text-base truncate ${msg.status === 'new' ? 'text-foreground' : 'text-muted-foreground'}`}
+														className={cn(
+															'font-bold text-base truncate',
+															msg.status === 'new'
+																? 'text-foreground'
+																: 'text-muted-foreground',
+														)}
 													>
 														{msg.subject}
 													</h3>
 													<Badge
-														variant={STATUS_MAP[msg.status]?.variant}
-														className='text-[10px] uppercase font-bold px-2'
+														variant={statusMap[msg.status]?.variant}
+														className='text-[10px] uppercase font-bold px-2 shadow-none'
 													>
-														{STATUS_MAP[msg.status]?.label}
+														{statusMap[msg.status]?.label}
 													</Badge>
 													{msg.adminReply && (
 														<Badge
 															variant='outline'
-															className='gap-1 text-[10px] bg-green-50 text-green-600 border-green-200'
+															className='gap-1 text-[10px] bg-green-500/10 text-green-600 border-transparent shadow-none'
 														>
 															<Bot className='h-3 w-3' /> Javob berilgan
 														</Badge>
@@ -470,26 +498,25 @@ export default function AdminSupportPage() {
 
 												<div className='flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-muted-foreground font-medium'>
 													<span className='flex items-center gap-1.5'>
-														<User className='h-3.5 w-3.5 text-primary' />{' '}
-														{msg.name}
+														<User className='h-3.5 w-3.5' /> {msg.name}
 													</span>
 													<span className='flex items-center gap-1.5'>
-														<Phone className='h-3.5 w-3.5 text-primary' />{' '}
-														{msg.phone}
+														<Phone className='h-3.5 w-3.5' />{' '}
+														{formatPhone(msg.phone)}
 													</span>
 													<span className='flex items-center gap-1.5'>
 														<Calendar className='h-3.5 w-3.5' />{' '}
-														{formatDate(msg.createdAt)}
+														{formatUzDate(msg.createdAt)}
 													</span>
 												</div>
 
-												<p className='text-sm text-muted-foreground mt-3 line-clamp-1 italic'>
+												<p className='text-sm text-muted-foreground mt-3 line-clamp-1 italic truncate'>
 													"{msg.message}"
 												</p>
 											</div>
 
 											<div
-												className='flex items-center'
+												className='flex items-center shrink-0'
 												onClick={e => e.stopPropagation()}
 											>
 												<DropdownMenu>
@@ -497,39 +524,47 @@ export default function AdminSupportPage() {
 														<Button
 															variant='ghost'
 															size='icon'
-															className='h-9 w-9 rounded-full group-hover:bg-muted'
+															className='h-8 w-8 text-muted-foreground'
 														>
 															<MoreVertical className='h-4 w-4' />
 														</Button>
 													</DropdownMenuTrigger>
 													<DropdownMenuContent align='end' className='w-44'>
-														<DropdownMenuItem onClick={() => openMessage(msg)}>
-															<Eye className='h-4 w-4 mr-2' /> Ko'rish
+														<DropdownMenuItem
+															className='cursor-pointer'
+															onClick={() => openMessage(msg)}
+														>
+															<Eye className='h-4 w-4 mr-2' />{' '}
+															{t('common.view') || "Ko'rish"}
 														</DropdownMenuItem>
 														<DropdownMenuItem
+															className='cursor-pointer'
 															onClick={() =>
 																handleStatusChange(msg._id, 'answered')
 															}
 														>
-															<CheckCircle className='h-4 w-4 mr-2' /> Javob
-															berildi
+															<CheckCircle className='h-4 w-4 mr-2' />{' '}
+															{t('dashboard.markAsAnswered') ||
+																'Javob berilgan'}
 														</DropdownMenuItem>
 														<DropdownMenuItem
+															className='cursor-pointer text-destructive focus:text-destructive'
 															onClick={() => handleStatusChange(msg._id, 'new')}
-															className='text-destructive'
 														>
-															<MessageSquare className='h-4 w-4 mr-2' /> Yangi
-															deb belgilash
+															<MessageSquare className='h-4 w-4 mr-2' />{' '}
+															{t('dashboard.markAsNew') ||
+																'Yangi deb belgilash'}
 														</DropdownMenuItem>
 														<Separator className='my-1' />
 														<DropdownMenuItem
+															className='cursor-pointer text-destructive focus:text-destructive'
 															onClick={() => {
 																setDeleteTarget(msg)
 																setShowDeleteModal(true)
 															}}
-															className='text-destructive focus:bg-destructive/10'
 														>
-															<Trash2 className='h-4 w-4 mr-2' /> O'chirish
+															<Trash2 className='h-4 w-4 mr-2' />{' '}
+															{t('common.delete') || "O'chirish"}
 														</DropdownMenuItem>
 													</DropdownMenuContent>
 												</DropdownMenu>
@@ -540,8 +575,8 @@ export default function AdminSupportPage() {
 							</motion.div>
 						))}
 					</AnimatePresence>
-				</motion.div>
+				</div>
 			)}
-		</motion.div>
+		</div>
 	)
 }
