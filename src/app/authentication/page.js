@@ -150,12 +150,12 @@ export default function LoginPage() {
 												{t('auth.getCode') || 'Kodni olish uchun'}
 											</p>
 											<a
-												href='https://t.me/TengdoshUstoz_Bot'
+												href='https://t.me/tengdoshmentorbot'
 												target='_blank'
 												rel='noopener noreferrer'
 												className='text-sm font-bold text-primary hover:underline'
 											>
-												@TengdoshUstoz_Bot
+												@tengdoshmentorbot
 											</a>
 										</div>
 									</div>
@@ -166,7 +166,7 @@ export default function LoginPage() {
 										asChild
 									>
 										<a
-											href='https://t.me/TengdoshUstoz_Bot'
+											href='https://t.me/tengdoshmentorbot'
 											target='_blank'
 											rel='noopener noreferrer'
 										>
